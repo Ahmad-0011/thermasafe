@@ -515,11 +515,17 @@ const DB={
     if(st && !st.error && st.data && st.data[0] && st.data[0].temp_threshold!=null) db.threshold=Number(st.data[0].temp_threshold);
   },
   subscribe(){
+    /* قناة أساسية: العمال + نداءات SOS (معزولة حتى لا يكسرها أي جدول آخر) */
     try{
-      this.sb.channel('ts-realtime')
+      this.sb.channel('ts-core')
         .on('postgres_changes',{event:'*',schema:'public',table:'workers'},()=>this.refresh().then(rerender))
-        .on('postgres_changes',{event:'*',schema:'public',table:'settings'},()=>this.refresh().then(rerender))
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'sos_alerts'},(p)=>{ this.refresh().then(rerender); onSosAlert(p&&p.new); })
+        .subscribe();
+    }catch(e){}
+    /* قناة منفصلة للإعدادات (إن لم يوجد الجدول لا يؤثر على تنبيهات SOS) */
+    try{
+      this.sb.channel('ts-settings')
+        .on('postgres_changes',{event:'*',schema:'public',table:'settings'},()=>this.refresh().then(rerender))
         .subscribe();
     }catch(e){}
   },
