@@ -174,6 +174,21 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
   box-shadow:0 14px 30px -8px rgba(239,68,68,.7);display:grid;place-items:center;letter-spacing:1px;animation:pulse 2s infinite;}
 .sos-fab:hover{filter:brightness(1.08);}
 
+/* شاشة الطوارئ الحمراء (لحساب المختص) */
+.sos-overlay{position:fixed;inset:0;z-index:100;display:none;place-items:center;text-align:center;color:#fff;padding:24px;
+  background:#c40d0d;animation:sosflash .8s steps(1) infinite;}
+.sos-overlay.show{display:grid;}
+@keyframes sosflash{0%,100%{background:#c40d0d;}50%{background:#7a0505;}}
+.sos-ov-inner{max-width:600px;}
+.sos-ov-icon{font-size:104px;line-height:1;animation:pulse 1s infinite;}
+.sos-overlay h1{font-size:clamp(34px,7vw,58px);margin:10px 0 6px;font-weight:800;letter-spacing:1px;}
+.sos-ov-sub{font-size:18px;opacity:.9;margin-bottom:22px;letter-spacing:3px;}
+.sos-ov-who{font-size:24px;margin-bottom:10px;} .sos-ov-who b{font-weight:800;}
+.sos-ov-meta{font-size:19px;opacity:.95;margin-bottom:30px;}
+.sos-ov-btn{background:#fff;color:#c40d0d;border:none;font-family:inherit;font-weight:800;font-size:18px;
+  padding:16px 36px;border-radius:14px;cursor:pointer;box-shadow:0 14px 34px rgba(0,0,0,.4);transition:.15s;}
+.sos-ov-btn:hover{transform:scale(1.04);}
+
 .modal-back{position:fixed;inset:0;z-index:60;background:rgba(4,9,18,.72);backdrop-filter:blur(4px);display:none;place-items:center;padding:20px;}
 .modal-back.open{display:grid;}
 .modal{width:100%;max-width:560px;background:linear-gradient(180deg,var(--card-2),var(--card));border:1px solid var(--line-strong);border-radius:18px;padding:26px;box-shadow:var(--shadow);max-height:86vh;overflow-y:auto;}
@@ -483,7 +498,7 @@ const DB={
     try{
       this.sb.channel('ts-realtime')
         .on('postgres_changes',{event:'*',schema:'public',table:'workers'},()=>this.refresh().then(rerender))
-        .on('postgres_changes',{event:'*',schema:'public',table:'sos_alerts'},()=>this.refresh().then(rerender))
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'sos_alerts'},(p)=>{ this.refresh().then(rerender); onSosAlert(p&&p.new); })
         .subscribe();
     }catch(e){}
   },
@@ -552,6 +567,62 @@ function reflectDbStatus(){
 }
 function rerender(){
   if(document.getElementById('v-specialist').classList.contains('active')) renderSpecialist();
+}
+/* نداء استغاثة وارد (من عامل أو من زر ESP) */
+function playBeep(freq){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.type='square'; o.frequency.value=freq||880;
+    g.gain.setValueAtTime(0.0001,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.28,ctx.currentTime+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.35);
+    o.start(); o.stop(ctx.currentTime+0.37);
+  }catch(e){}
+}
+let _sosSiren=null;
+function startSiren(){
+  if(_sosSiren) return;
+  const beat=()=>{ playBeep(880); setTimeout(()=>playBeep(620),380); };
+  beat(); _sosSiren=setInterval(beat,1100);
+  setTimeout(stopSiren,25000);   // إيقاف تلقائي بعد 25 ثانية كحد أقصى
+}
+function stopSiren(){ if(_sosSiren){ clearInterval(_sosSiren); _sosSiren=null; } }
+
+function onSosAlert(row){
+  const who=row?(row.name||row.serial||'عامل'):'عامل';
+  const loc=row&&row.location?(' — '+row.location):'';
+  toast('🆘 نداء استغاثة جديد من: <b>'+who+'</b>'+loc+' — تحقّق فوراً!',true);
+  const s=TS.session();
+  if(s && s.role==='specialist') showSosOverlay(row);   // الشاشة الحمراء للمختص فقط
+  else playBeep(880);
+}
+function showSosOverlay(row){
+  let ov=document.getElementById('sosOverlay');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='sosOverlay'; ov.className='sos-overlay';
+    ov.innerHTML=`<div class="sos-ov-inner">
+        <div class="sos-ov-icon">🆘</div>
+        <h1>نداء استغاثة طارئ</h1>
+        <div class="sos-ov-sub">SOS EMERGENCY</div>
+        <div class="sos-ov-who"></div>
+        <div class="sos-ov-meta"></div>
+        <button class="sos-ov-btn">تم الاطّلاع — عرض التفاصيل</button>
+      </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('.sos-ov-btn').addEventListener('click',()=>{
+      ov.classList.remove('show'); stopSiren();
+      if(TS.session()&&TS.session().role==='specialist') go('specialist');
+    });
+  }
+  const who=row?(row.name||row.serial||'عامل غير معروف'):'عامل';
+  const serial=row&&row.serial?row.serial:'';
+  const loc=row&&row.location?row.location:'—';
+  const time=new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'});
+  ov.querySelector('.sos-ov-who').innerHTML='العامل: <b>'+who+'</b>'+(serial?(' — '+serial):'');
+  ov.querySelector('.sos-ov-meta').innerHTML='📍 '+loc+' &nbsp;·&nbsp; 🕐 '+time;
+  ov.classList.add('show');
+  startSiren();
 }
 
 const TS={
