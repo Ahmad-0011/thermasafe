@@ -1,0 +1,861 @@
+<title>ThermaSafe</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap">
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root{
+  --bg-0:#070d1a; --bg-1:#0a1424; --bg-2:#0e1c30;
+  --card:#101f34; --card-2:#142743;
+  --line:rgba(120,160,210,.14); --line-strong:rgba(120,160,210,.28);
+  --text:#eaf1fb; --muted:#9fb1c9; --dim:#6f83a0;
+  --orange:#f0821f; --orange-soft:#ff9a3d; --teal:#2ec4b6; --teal-soft:#37e0cf; --blue:#3b82f6;
+  --safe:#34d17f; --mid:#f4c430; --high:#f0821f; --danger:#ef4444;
+  --radius:16px; --radius-lg:22px;
+  --shadow:0 18px 40px -18px rgba(0,0,0,.7);
+  --grad-brand:linear-gradient(90deg,var(--teal) 0%,#3a86b8 45%,var(--orange) 100%);
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; font-family:'Tajawal','Segoe UI',Tahoma,sans-serif; color:var(--text); direction:rtl;
+  background:
+    radial-gradient(1100px 700px at 100% -5%,rgba(46,196,182,.10),transparent 55%),
+    radial-gradient(1000px 700px at -5% 105%,rgba(240,130,31,.10),transparent 55%),
+    linear-gradient(160deg,var(--bg-1) 0%,var(--bg-0) 55%,#060a13 100%);
+  background-attachment:fixed; min-height:100vh; -webkit-font-smoothing:antialiased;
+}
+a{color:inherit;text-decoration:none;} button{font-family:inherit;cursor:pointer;}
+
+.side-scene{position:fixed;inset:0 auto 0 0;width:34%;max-width:520px;pointer-events:none;z-index:0;
+  background:linear-gradient(90deg,rgba(7,13,26,0) 0%,var(--bg-0) 92%),
+  radial-gradient(60% 40% at 30% 80%,rgba(63,130,246,.12),transparent 70%),
+  linear-gradient(0deg,rgba(240,130,31,.05),transparent 40%);opacity:.9;}
+.side-scene::after{content:"";position:absolute;bottom:0;left:0;right:0;height:62%;
+  background-image:linear-gradient(transparent 60%,rgba(0,0,0,.35)),
+  repeating-linear-gradient(90deg,transparent 0 34px,rgba(150,180,220,.05) 34px 36px);
+  -webkit-mask-image:linear-gradient(90deg,#000 0%,transparent 90%);mask-image:linear-gradient(90deg,#000 0%,transparent 90%);}
+
+.topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;
+  padding:16px 34px;background:rgba(9,17,31,.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);}
+.brand{display:flex;align-items:center;gap:12px;font-weight:800;letter-spacing:4px;font-size:20px;}
+.brand .logo-mark{width:30px;height:38px;display:grid;place-items:center;}
+.brand .logo-mark svg{filter:drop-shadow(0 4px 10px rgba(240,130,31,.35));}
+.brand .word b{color:var(--orange);}
+.topbar-actions{display:flex;align-items:center;gap:12px;}
+
+.btn{border:1px solid var(--line-strong);background:transparent;color:var(--text);padding:10px 18px;border-radius:11px;
+  font-size:14px;font-weight:500;transition:.18s;display:inline-flex;align-items:center;gap:8px;}
+.btn:hover{border-color:var(--teal);color:var(--teal-soft);}
+.btn-ai{background:linear-gradient(120deg,#2b6cb0,#1f4f8f);border:none;color:#fff;box-shadow:0 10px 22px -10px rgba(59,130,246,.7);}
+.btn-ai:hover{color:#fff;filter:brightness(1.08);}
+.btn-primary{background:var(--grad-brand);border:none;color:#fff;font-weight:700;box-shadow:0 14px 30px -12px rgba(240,130,31,.55);}
+.btn-primary:hover{color:#fff;filter:brightness(1.06);}
+.btn-orange{background:linear-gradient(90deg,var(--orange),var(--orange-soft));border:none;color:#fff;font-weight:700;box-shadow:0 14px 30px -12px rgba(240,130,31,.6);}
+.btn-block{width:100%;justify-content:center;padding:15px;font-size:16px;}
+
+.view{display:none;} .view.active{display:block;}
+
+.page{position:relative;z-index:2;max-width:980px;margin:0 auto;padding:40px 22px 90px;}
+.page-wide{max-width:1080px;}
+.hero{text-align:center;margin:28px 0 40px;}
+.hero-mark{height:92px;margin:0 auto 14px;display:flex;justify-content:center;}
+.hero-mark svg{height:100%;width:auto;filter:drop-shadow(0 10px 24px rgba(240,130,31,.4));}
+.hero .kicker{color:var(--muted);font-size:20px;margin-bottom:4px;}
+.hero .logo-big{font-size:clamp(42px,8vw,74px);font-weight:800;letter-spacing:6px;color:#dbe6f5;line-height:1.05;}
+.hero .logo-big b{color:var(--orange);}
+.hero p{color:var(--muted);max-width:520px;margin:14px auto 0;line-height:1.9;}
+.section-title{text-align:center;font-size:26px;font-weight:800;margin:6px 0 28px;}
+
+.choose-hint{text-align:center;color:var(--muted);border-right:3px solid var(--teal);display:inline-block;padding-right:10px;margin:0 auto 26px;width:100%;}
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;}
+.role-card{background:linear-gradient(180deg,var(--card-2),var(--card));border:1px solid var(--line);border-radius:var(--radius-lg);
+  padding:40px 30px 28px;text-align:center;transition:.22s;border-bottom:3px solid transparent;color:var(--text);}
+.role-card:hover{transform:translateY(-6px);box-shadow:var(--shadow);}
+.role-card .rc-icon{width:96px;height:96px;margin:0 auto 22px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--line-strong);background:rgba(255,255,255,.02);font-size:40px;}
+.role-card h3{font-size:24px;margin:0 0 10px;}
+.role-card p{color:var(--muted);line-height:1.8;min-height:54px;margin:0 0 22px;}
+.role-card .go{font-weight:700;display:inline-flex;align-items:center;gap:8px;}
+.role-card.teal{border-bottom-color:var(--teal);} .role-card.teal .rc-icon{color:var(--teal);box-shadow:inset 0 0 0 1px rgba(46,196,182,.4);} .role-card.teal .go{color:var(--teal-soft);}
+.role-card.orange{border-bottom-color:var(--orange);} .role-card.orange .rc-icon{color:var(--orange);box-shadow:inset 0 0 0 1px rgba(240,130,31,.4);} .role-card.orange .go{color:var(--orange-soft);}
+
+.auth-wrap{position:relative;z-index:2;min-height:calc(100vh - 72px);display:grid;place-items:center;padding:40px 20px;}
+.auth-card{width:100%;max-width:440px;background:rgba(16,28,48,.72);border:1px solid var(--line-strong);border-radius:var(--radius-lg);
+  padding:38px 34px;backdrop-filter:blur(10px);box-shadow:var(--shadow);}
+.auth-logo{text-align:center;margin-bottom:26px;}
+.auth-logo .lg-mark{width:58px;height:68px;margin:0 auto 12px;display:grid;place-items:center;}
+.auth-logo .lg-mark svg{filter:drop-shadow(0 6px 14px rgba(240,130,31,.35));}
+.auth-logo .lg-word{font-size:26px;font-weight:800;letter-spacing:5px;} .auth-logo .lg-word b{color:var(--orange);}
+.auth-logo .lg-tag{color:var(--dim);font-size:12px;letter-spacing:3px;margin-top:6px;} .auth-logo .lg-tag b{color:var(--orange);}
+.auth-card h2{text-align:center;margin:4px 0;font-size:24px;} .auth-card .sub{text-align:center;color:var(--muted);margin-bottom:24px;font-size:14px;}
+.field{margin-bottom:16px;} .field label{display:block;margin-bottom:8px;color:var(--muted);font-size:14px;}
+.input-wrap{display:flex;align-items:center;gap:10px;background:rgba(8,16,30,.7);border:1px solid var(--line);border-radius:12px;padding:0 14px;transition:.18s;}
+.input-wrap:focus-within{border-color:var(--teal);}
+.input-wrap .ic{color:var(--dim);font-size:16px;}
+.input-wrap input{flex:1;background:transparent;border:none;outline:none;color:var(--text);padding:14px 0;font-size:15px;font-family:inherit;}
+.input-wrap input::placeholder{color:var(--dim);}
+.pw-toggle{background:none;border:none;color:var(--dim);font-size:16px;}
+.auth-divider{display:flex;align-items:center;gap:14px;color:var(--dim);margin:20px 0 14px;font-size:13px;}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--line);}
+.auth-links{text-align:center;} .auth-links a{color:var(--orange-soft);font-weight:500;font-size:14px;}
+.auth-links .create{display:block;margin-top:14px;color:var(--teal-soft);font-weight:700;}
+.role-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(46,196,182,.10);border:1px solid rgba(46,196,182,.3);color:var(--teal-soft);
+  padding:6px 14px;border-radius:30px;font-size:13px;margin:0 auto 18px;font-weight:500;}
+.role-chip.orange{background:rgba(240,130,31,.10);border-color:rgba(240,130,31,.3);color:var(--orange-soft);}
+.hint-msg{text-align:center;font-size:13px;margin-top:12px;min-height:18px;} .hint-msg.err{color:#ff8f8f;} .hint-msg.ok{color:var(--teal-soft);}
+.footer-note{text-align:center;color:var(--dim);font-size:12px;margin-top:26px;letter-spacing:2px;}
+
+.card{background:linear-gradient(180deg,var(--card-2),var(--card));border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-bottom:22px;box-shadow:var(--shadow);}
+.card h3.card-title{text-align:center;margin:0 0 18px;font-size:20px;font-weight:700;}
+.card h3.card-title.row{display:flex;align-items:center;justify-content:center;gap:8px;}
+.card h3.card-title.left{text-align:right;justify-content:flex-start;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.mini-field .lbl{color:var(--muted);font-size:13px;margin-bottom:8px;text-align:right;}
+.mini-field .val-box{display:flex;align-items:center;justify-content:space-between;background:rgba(8,16,30,.6);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:17px;font-weight:700;}
+.mini-field .val-box .ic{color:var(--dim);}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+.tab{background:rgba(8,16,30,.5);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;color:var(--muted);font-weight:600;transition:.16s;}
+.tab.active{border-color:var(--orange);color:var(--orange-soft);background:rgba(240,130,31,.06);}
+
+.gauge-block{display:flex;align-items:center;gap:22px;flex-wrap:wrap;justify-content:center;}
+.gauge{width:200px;height:110px;position:relative;} .gauge svg{width:100%;height:100%;overflow:visible;}
+.gauge .g-label{position:absolute;left:0;right:0;top:42px;text-align:center;}
+.gauge .g-label .g-cap{color:var(--muted);font-size:12px;} .gauge .g-label .g-level{font-size:26px;font-weight:800;}
+.gauge-side{text-align:center;} .gauge-side .big{font-size:30px;font-weight:800;} .gauge-side .cap{color:var(--muted);font-size:13px;}
+.legend{display:grid;gap:12px;min-width:210px;}
+.legend .lg-row{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px;font-size:14px;}
+.legend .lg-row .dot{width:12px;height:12px;border-radius:50%;display:inline-block;}
+.legend .lg-row .name{display:flex;align-items:center;gap:8px;} .legend .lg-row .name b{color:var(--muted);font-weight:500;}
+.dot-safe{background:var(--safe);} .dot-mid{background:var(--mid);} .dot-high{background:var(--orange);} .dot-danger{background:var(--danger);}
+
+.station{display:flex;align-items:center;justify-content:space-between;gap:18px;background:rgba(8,16,30,.5);border:1px solid var(--line);border-radius:14px;padding:18px 20px;flex-wrap:wrap;}
+.station .st-left{display:flex;align-items:center;gap:16px;}
+.station .drop{width:66px;height:66px;border-radius:50%;background:radial-gradient(circle at 40% 30%,#4aa8ff,#1f6fd0);display:grid;place-items:center;font-size:30px;box-shadow:0 0 26px -6px rgba(63,130,246,.6);}
+.station .st-info b{font-size:18px;} .station .st-info .dist{color:var(--muted);font-size:13px;margin-top:2px;} .station .st-info p{color:var(--dim);font-size:12px;margin:6px 0 0;max-width:240px;}
+.station .btn-go{border:1px solid var(--teal);color:var(--teal-soft);background:rgba(46,196,182,.06);border-radius:12px;padding:14px 18px;display:inline-flex;gap:8px;align-items:center;font-weight:600;}
+
+.report-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;align-items:center;}
+.report-ring{width:118px;height:118px;border-radius:50%;display:grid;place-items:center;text-align:center;border:4px solid var(--orange);box-shadow:inset 0 0 24px -8px rgba(240,130,31,.5);}
+.report-ring .cap{color:var(--muted);font-size:10px;} .report-ring .lvl{font-size:20px;font-weight:800;color:var(--orange-soft);}
+.stat-cell{text-align:center;} .stat-cell .cap{color:var(--muted);font-size:12px;margin-bottom:8px;} .stat-cell .v{font-size:22px;font-weight:800;} .stat-cell .ic{font-size:20px;margin-top:6px;color:var(--dim);}
+.download-bar{margin-top:16px;text-align:center;border:1px dashed var(--line-strong);border-radius:12px;padding:14px;color:var(--muted);font-size:14px;cursor:pointer;transition:.16s;}
+.download-bar:hover{color:var(--teal-soft);border-color:var(--teal);}
+
+.sensor{display:grid;grid-template-columns:130px repeat(4,1fr);gap:14px;align-items:center;}
+.helmet{font-size:64px;text-align:center;} .helmet .strip{width:76px;height:8px;border-radius:6px;margin:4px auto 0;background:linear-gradient(90deg,var(--safe),var(--mid),var(--orange),var(--danger));box-shadow:0 0 14px -2px rgba(240,130,31,.6);}
+
+.legend-inline{display:flex;gap:18px;justify-content:flex-start;margin-bottom:16px;font-size:13px;color:var(--muted);flex-wrap:wrap;}
+.legend-inline span{display:inline-flex;align-items:center;gap:6px;} .legend-inline .d{width:10px;height:10px;border-radius:50%;}
+.table-wrap{overflow-x:auto;}
+table.data{width:100%;border-collapse:collapse;font-size:14px;}
+table.data th,table.data td{padding:14px 12px;text-align:center;border-bottom:1px solid var(--line);}
+table.data thead th{color:var(--muted);font-weight:600;background:rgba(8,16,30,.4);}
+table.data thead .grp th{color:var(--dim);font-size:12px;}
+table.data tbody tr:hover{background:rgba(46,196,182,.03);}
+.badge{display:inline-block;padding:5px 14px;border-radius:20px;font-weight:700;font-size:13px;border:1px solid transparent;min-width:66px;}
+.badge.safe{color:var(--safe);border-color:rgba(52,209,127,.5);background:rgba(52,209,127,.08);}
+.badge.mid{color:var(--mid);border-color:rgba(244,196,48,.5);background:rgba(244,196,48,.08);}
+.badge.high{color:var(--orange-soft);border-color:rgba(240,130,31,.55);background:rgba(240,130,31,.10);}
+.badge.danger{color:#ff7676;border-color:rgba(239,68,68,.55);background:rgba(239,68,68,.10);}
+.status-cell{display:inline-flex;align-items:center;gap:8px;justify-content:center;} .status-cell .dot{width:10px;height:10px;border-radius:50%;}
+
+.sos-card{border:1px solid rgba(239,68,68,.5);background:linear-gradient(90deg,rgba(239,68,68,.10),rgba(239,68,68,.02));border-radius:14px;padding:20px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;}
+.sos-card .sos-mid{display:flex;align-items:center;gap:18px;}
+.sos-card .sos-icon{font-size:40px;color:var(--danger);animation:pulse 1.6s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.sos-card .sos-txt b{font-size:17px;} .sos-card .sos-txt .meta{color:var(--muted);font-size:13px;margin-top:6px;display:flex;gap:16px;flex-wrap:wrap;}
+.sos-card .btn-loc{border:1px solid var(--danger);color:#ff8f8f;background:rgba(239,68,68,.06);border-radius:12px;padding:12px 18px;}
+
+.hed-block{display:grid;grid-template-columns:210px 1fr;gap:22px;align-items:center;}
+.hed-gauge{text-align:center;} .hed-gauge .num{font-size:46px;font-weight:800;color:#ff7676;} .hed-gauge .cap{color:var(--muted);font-size:13px;} .hed-gauge .cap2{color:var(--dim);font-size:12px;margin-top:2px;}
+
+.sos-fab{position:fixed;bottom:26px;left:26px;z-index:40;width:74px;height:74px;border-radius:50%;
+  background:radial-gradient(circle at 40% 30%,#ff5a5a,#c81e1e);border:3px solid rgba(255,255,255,.15);color:#fff;font-weight:800;font-size:18px;
+  box-shadow:0 14px 30px -8px rgba(239,68,68,.7);display:grid;place-items:center;letter-spacing:1px;animation:pulse 2s infinite;}
+.sos-fab:hover{filter:brightness(1.08);}
+
+.modal-back{position:fixed;inset:0;z-index:60;background:rgba(4,9,18,.72);backdrop-filter:blur(4px);display:none;place-items:center;padding:20px;}
+.modal-back.open{display:grid;}
+.modal{width:100%;max-width:560px;background:linear-gradient(180deg,var(--card-2),var(--card));border:1px solid var(--line-strong);border-radius:18px;padding:26px;box-shadow:var(--shadow);max-height:86vh;overflow-y:auto;}
+.modal .m-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.modal .m-head h3{margin:0;font-size:20px;display:flex;align-items:center;gap:10px;}
+.modal .m-close{background:none;border:none;color:var(--muted);font-size:22px;}
+.ai-item{border:1px solid var(--line);border-right:3px solid var(--teal);border-radius:12px;padding:14px 16px;margin-bottom:12px;line-height:1.8;background:rgba(8,16,30,.4);}
+.ai-item.warn{border-right-color:var(--orange);} .ai-item.crit{border-right-color:var(--danger);}
+.ai-item b{display:block;margin-bottom:4px;} .ai-typing{color:var(--teal-soft);font-size:13px;}
+
+.toast{position:fixed;bottom:26px;right:26px;z-index:80;background:var(--card-2);border:1px solid var(--line-strong);border-right:3px solid var(--teal);
+  padding:14px 18px;border-radius:12px;box-shadow:var(--shadow);transform:translateY(30px);opacity:0;transition:.28s;max-width:320px;line-height:1.7;}
+.toast.show{transform:translateY(0);opacity:1;} .toast.danger{border-right-color:var(--danger);}
+
+@media (max-width:760px){
+  .role-grid{grid-template-columns:1fr;}
+  .report-row{grid-template-columns:repeat(3,1fr);} .report-ring{grid-column:span 3;margin:0 auto 6px;}
+  .sensor{grid-template-columns:repeat(2,1fr);} .helmet{grid-column:span 2;}
+  .hed-block{grid-template-columns:1fr;} .grid-2{grid-template-columns:1fr;}
+  .topbar{padding:14px 18px;} .brand{font-size:17px;letter-spacing:2px;}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+
+<div class="side-scene"></div>
+<header class="topbar" id="topbar"></header>
+
+<!-- ===================== LANDING ===================== -->
+<section class="view active" id="v-landing">
+  <main class="page">
+    <div class="hero">
+      <div class="hero-mark" id="heroMark"></div>
+      <div class="kicker">مرحباً بك في</div>
+      <div class="logo-big">THERM<b>A</b>SAFE</div>
+      <p>نظام ذكي لمراقبة التعرّض الحراري لعمالك بدقة، لضمان السلامة والاستدامة.</p>
+    </div>
+    <div class="choose-hint">يرجى اختيار نوع المستخدم للدخول:</div>
+    <div class="role-grid">
+      <button class="role-card teal" data-role="specialist">
+        <div class="rc-icon">🛡️</div>
+        <h3>دخول مختص سلامة</h3>
+        <p>لوحة تحكم متكاملة لمراقبة التعرّض الحراري لجميع العمال في الموقع.</p>
+        <span class="go">ابدأ من هنا ←</span>
+      </button>
+      <button class="role-card orange" data-role="worker">
+        <div class="rc-icon">👷</div>
+        <h3>دخول عامل</h3>
+        <p>تسجيل الدخول لعرض تقريرك الشخصي وإشعارات التعرّض الحراري.</p>
+        <span class="go">ابدأ من هنا ←</span>
+      </button>
+    </div>
+  </main>
+</section>
+
+<!-- ===================== LOGIN ===================== -->
+<section class="view" id="v-login">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="lg-mark" id="lgMark"></div>
+        <div class="lg-word">THERM<b>A</b>SAFE</div>
+        <div class="lg-tag">HEAT RISK. PREDICT. <b>PROTECT.</b></div>
+      </div>
+      <div id="roleChip"></div>
+
+      <div id="loginView">
+        <h2>مرحباً بك في THERMASAFE</h2>
+        <div class="sub">تسجيل الدخول إلى حسابك</div>
+        <div class="field"><label>اسم المستخدم</label>
+          <div class="input-wrap"><span class="ic">👤</span><input id="lgUser" type="text" placeholder="أدخل اسم المستخدم"></div></div>
+        <div class="field"><label>كلمة المرور</label>
+          <div class="input-wrap"><span class="ic">🔒</span><input id="lgPass" type="password" placeholder="أدخل كلمة المرور"><button class="pw-toggle" data-target="lgPass">👁</button></div></div>
+        <button class="btn btn-primary btn-block" id="loginBtn">دخول ←</button>
+        <div class="hint-msg" id="loginMsg"></div>
+        <div class="auth-divider">أو</div>
+        <div class="auth-links">
+          <a href="#" id="forgot">‹ هل نسيت كلمة المرور</a>
+          <a href="#" class="create" id="toSignup">＋ إنشاء حساب جديد</a>
+        </div>
+      </div>
+
+      <div id="signupView" style="display:none">
+        <h2>إنشاء حساب جديد</h2>
+        <div class="sub">سجّل بياناتك للانضمام إلى النظام</div>
+        <div class="field"><label>الاسم الكامل</label>
+          <div class="input-wrap"><span class="ic">🪪</span><input id="suName" type="text" placeholder="مثال: محمد أحمد"></div></div>
+        <div class="field"><label>الرقم التسلسلي (اختياري)</label>
+          <div class="input-wrap"><span class="ic">🏷️</span><input id="suSerial" type="text" placeholder="يُنشأ تلقائياً إن تُرك فارغاً"></div></div>
+        <div class="field"><label>اسم المستخدم</label>
+          <div class="input-wrap"><span class="ic">👤</span><input id="suUser" type="text" placeholder="اسم مستخدم فريد"></div></div>
+        <div class="field"><label>كلمة المرور</label>
+          <div class="input-wrap"><span class="ic">🔒</span><input id="suPass" type="password" placeholder="أدخل كلمة المرور"><button class="pw-toggle" data-target="suPass">👁</button></div></div>
+        <button class="btn btn-primary btn-block" id="signupBtn">إنشاء الحساب وتسجيل الدخول</button>
+        <div class="hint-msg" id="signupMsg"></div>
+        <div class="auth-divider">أو</div>
+        <div class="auth-links"><a href="#" class="create" id="toLogin" style="color:var(--orange-soft)">‹ لديك حساب؟ تسجيل الدخول</a></div>
+      </div>
+      <div class="footer-note">© 2024 THERMASAFE. جميع الحقوق محفوظة.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== WORKER ===================== -->
+<section class="view" id="v-worker">
+  <main class="page">
+    <div class="hero" style="margin-bottom:24px">
+      <div class="logo-big" style="font-size:34px;letter-spacing:2px">واجهة العامل</div>
+      <p>نظام ذكي لمراقبة التعرّض الحراري لعمالك بدقة، لضمان السلامة والاستدامة.</p>
+    </div>
+
+    <div class="card">
+      <div class="grid-2">
+        <div class="mini-field"><div class="lbl">اسم العامل</div><div class="val-box"><span id="wName">—</span><span class="ic">👤</span></div></div>
+        <div class="mini-field"><div class="lbl">الرقم التسلسلي</div><div class="val-box"><span id="wSerial">—</span><span class="ic">🏷️</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">مدة التعرّض</h3>
+      <div class="tabs">
+        <div class="tab" data-range="month">هذا الشهر 📅</div>
+        <div class="tab active" data-range="week">هذا الأسبوع 📅</div>
+      </div>
+      <div class="card" style="margin:0;background:rgba(8,16,30,.4)">
+        <h3 class="card-title" id="doseTitle">تقرير Heat Exposure Dose لهذا الأسبوع</h3>
+        <div class="gauge-block">
+          <div>
+            <div class="gauge">
+              <svg viewBox="0 0 200 110">
+                <defs><linearGradient id="ggrad" x1="0" x2="1">
+                  <stop offset="0" stop-color="#34d17f"/><stop offset="0.4" stop-color="#f4c430"/>
+                  <stop offset="0.7" stop-color="#f0821f"/><stop offset="1" stop-color="#ef4444"/></linearGradient></defs>
+                <path d="M10 100 A90 90 0 0 1 190 100" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="16" stroke-linecap="round"/>
+                <path id="gaugeArc" d="M10 100 A90 90 0 0 1 190 100" fill="none" stroke="url(#ggrad)" stroke-width="16" stroke-linecap="round"/>
+                <line id="needle" x1="100" y1="100" x2="100" y2="28" stroke="#fff" stroke-width="3" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                <circle cx="100" cy="100" r="6" fill="#fff"/>
+              </svg>
+              <div class="g-label"><div class="g-cap">المستوى</div><div class="g-level" id="gLevel">—</div></div>
+            </div>
+            <div class="gauge-side" style="margin-top:6px"><div class="big" id="gHours">0 ساعة</div><div class="cap" id="gCap">إجمالي التعرّض هذا الأسبوع</div></div>
+          </div>
+          <div class="legend">
+            <div class="lg-row"><span class="name"><span class="dot dot-safe"></span>أقل من 10 ساعات</span><b>منخفض</b></div>
+            <div class="lg-row"><span class="name"><span class="dot dot-mid"></span>10 - 20 ساعة</span><b>متوسط</b></div>
+            <div class="lg-row"><span class="name"><span class="dot dot-high"></span>21 - 30 ساعة</span><b>مرتفع</b></div>
+            <div class="lg-row"><span class="name"><span class="dot dot-danger"></span>أكثر من 30 ساعة</span><b>خطر</b></div>
+          </div>
+        </div>
+        <button class="btn btn-orange btn-block" id="startWork" style="margin-top:18px">▶ ابدأ العمل</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title row">📍 أقرب محطة ترطيب</h3>
+      <div class="station">
+        <div class="st-left"><div class="drop">💧</div>
+          <div class="st-info"><b>محطة ترطيب A</b><div class="dist">تبعد 120 متر</div><p>اشرب الماء بانتظام للحفاظ على سلامتك ونشاطك.</p></div></div>
+        <button class="btn-go" id="goStation">✈ الانتقال إلى المحطة</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title row">📄 تقرير السلامة الخاص بي</h3>
+      <div class="report-row">
+        <div class="report-ring" id="reportRing"><div><div class="cap">Heat Exposure Dose</div><div class="lvl" id="rLevel">—</div>🛡️</div></div>
+        <div class="stat-cell"><div class="cap">درجة الحرارة</div><div class="v" id="rTemp">—</div><div class="ic">🌡️</div></div>
+        <div class="stat-cell"><div class="cap">الرطوبة</div><div class="v" id="rHum">—</div><div class="ic">💧</div></div>
+        <div class="stat-cell"><div class="cap">مدة التعرّض</div><div class="v" id="rHours">—</div><div class="ic">⏱️</div></div>
+        <div class="stat-cell"><div class="cap">التوصية</div><div class="v" id="rRec" style="font-size:15px">—</div><div class="ic">☕</div></div>
+      </div>
+      <div class="download-bar" id="downloadPdf">⬇ تحميل التقرير</div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">بيانات المستشعر الذكي</h3>
+      <div class="sensor">
+        <div class="helmet">⛑️<div class="strip"></div></div>
+        <div class="stat-cell"><div class="cap">درجة الحرارة</div><div class="v" id="sTemp">—</div><div class="ic">🌡️</div></div>
+        <div class="stat-cell"><div class="cap">الرطوبة النسبية</div><div class="v" id="sHum">—</div><div class="ic">💧</div></div>
+        <div class="stat-cell"><div class="cap">مؤشر الإجهاد الحراري</div><div class="v" id="sIndex" style="color:var(--orange-soft)">—</div><div class="ic">♨️</div></div>
+        <div class="stat-cell"><div class="cap">آخر تحديث</div><div class="v" id="sUpd" style="font-size:15px">منذ 1 دقيقة</div><div class="ic">🕐</div></div>
+      </div>
+    </div>
+  </main>
+  <button class="sos-fab" id="sosBtn">SOS</button>
+</section>
+
+<!-- ===================== SPECIALIST ===================== -->
+<section class="view" id="v-specialist">
+  <main class="page page-wide">
+    <div class="hero" style="margin-bottom:24px">
+      <div class="logo-big" style="font-size:34px;letter-spacing:2px">واجهة مختص السلامة</div>
+      <p>لوحة تحكم لمراقبة التعرّض الحراري لجميع العاملين في الموقع وتحليل المخاطر وإدارة التنبيهات.</p>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title left" style="color:var(--orange-soft)">📋 تقارير العمال</h3>
+      <div class="legend-inline">
+        <span><span class="d dot-danger"></span> خطر</span><span><span class="d dot-high"></span> مرتفع</span>
+        <span><span class="d dot-mid"></span> متوسط</span><span><span class="d dot-safe"></span> آمن</span>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-orange" id="addWorkerBtn" style="padding:10px 16px">➕ إضافة عامل</button>
+        <span id="dbStatus" style="font-size:12px;color:var(--dim)"></span>
+      </div>
+      <div class="table-wrap"><table class="data">
+        <thead>
+          <tr class="grp"><th rowspan="2">اسم العامل</th><th rowspan="2">رقم تسلسلي</th><th colspan="3">Heat Exposure Dose</th><th rowspan="2">الحالة</th><th rowspan="2">حذف</th></tr>
+          <tr class="grp"><th>اليوم</th><th>هذا الأسبوع</th><th>هذا الشهر</th></tr>
+        </thead>
+        <tbody id="reportBody"></tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title" style="color:#ff8f8f">SOS</h3>
+      <div class="sos-card">
+        <button class="btn-loc" id="sosLoc">📍 عرض الموقع</button>
+        <div class="sos-mid"><div class="sos-icon">⚠️</div>
+          <div class="sos-txt"><b id="sosTitle">تنبيه: عامل رقم 44563 استخدم زر SOS</b>
+            <div class="meta"><span>🕐 الوقت: <span id="sosTime">10:32 AM</span></span><span>📍 الموقع: <span id="sosPlace">وحدة الإنتاج 3</span></span></div></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title left" style="color:#ff8f8f">📊 عمال HED مرتفع</h3>
+      <div class="hed-block">
+        <div class="hed-gauge">
+          <svg viewBox="0 0 200 110" style="width:190px">
+            <path d="M10 100 A90 90 0 0 1 190 100" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="14" stroke-linecap="round"/>
+            <path d="M10 100 A90 90 0 0 1 155 38" fill="none" stroke="#ef4444" stroke-width="14" stroke-linecap="round"/>
+          </svg>
+          <div class="num" id="hedCount">7</div><div class="cap">عمال</div><div class="cap2">خلال هذا الأسبوع</div>
+        </div>
+        <div class="table-wrap">
+          <table class="data"><thead><tr><th>الرقم التسلسلي</th><th>اسم العامل</th><th>HED</th></tr></thead><tbody id="hedBody"></tbody></table>
+          <button class="btn btn-block" id="showAllHigh" style="margin-top:14px">👥 عرض جميع المبلّغين المرتفعين</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</section>
+
+<script>
+/* ============================ THERMASAFE app ============================ */
+/* session storage (per device) */
+const store = {
+  get(k,d){ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+
+/* seed data — used as a demo only while Supabase isn't connected */
+function seedDB(){ return {
+  accounts:[
+    {user:'worker',pass:'1234',role:'worker',name:'محمد أحمد العتيبي',serial:'TH-20481'},
+    {user:'specialist',pass:'1234',role:'specialist',name:'م. خالد الدوسري',serial:'SF-1001'}
+  ],
+  workers:[
+    {name:'محمد أحمد العتيبي',serial:'TH-20481',day:'mid',week:'high',month:'danger',status:'safe'},
+    {name:'سالم ناصر القحطاني',serial:'TH-19872',day:'safe',week:'mid',month:'high',status:'mid'},
+    {name:'أحمد علي الشهري',serial:'TH-17635',day:'mid',week:'mid',month:'high',status:'mid'},
+    {name:'فهد عبدالله عسيري',serial:'TH-15092',day:'high',week:'high',month:'danger',status:'danger'},
+    {name:'ناصر محمد آل دليم',serial:'TH-13457',day:'danger',week:'danger',month:'danger',status:'danger'}
+  ],
+  sos:null
+}; }
+let db=seedDB();
+let pickedRole='worker';
+
+/* ===================== data layer: Supabase, with local demo fallback ===================== */
+const DB={
+  mode:'local', sb:null,
+  configured(){
+    const u=window.SUPABASE_URL||'', k=window.SUPABASE_ANON_KEY||'';
+    return /^https:\/\/.+\.supabase\.co/.test(u) && k.length>20 && !/YOUR_|PUT_|xxxx/i.test(u+k);
+  },
+  async init(){
+    if(this.configured() && window.supabase){
+      try{
+        this.sb=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY);
+        await this.refresh();
+        this.mode='supabase';
+        this.subscribe();
+        reflectDbStatus(); rerender();
+        return;
+      }catch(e){ console.warn('Supabase غير متاح، تشغيل الوضع التجريبي المحلي:',e); }
+    }
+    this.mode='local';
+    const ls=store.get('ts_db',null);
+    if(ls&&Array.isArray(ls.workers)&&Array.isArray(ls.accounts)) db=ls;
+    reflectDbStatus(); rerender();
+  },
+  async refresh(){
+    const [w,s]=await Promise.all([
+      this.sb.from('workers').select('*').order('id'),
+      this.sb.from('sos_alerts').select('*').order('id',{ascending:false}).limit(1)
+    ]);
+    if(w.error) throw w.error;
+    db.workers=(w.data||[]).map(r=>({name:r.name,serial:r.serial,day:r.day,week:r.week,month:r.month,status:r.status}));
+    if(!s.error && s.data && s.data[0]){
+      const a=s.data[0];
+      db.sos={serial:a.serial,name:a.name,loc:a.location,time:new Date(a.created_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})};
+    }
+  },
+  subscribe(){
+    try{
+      this.sb.channel('ts-realtime')
+        .on('postgres_changes',{event:'*',schema:'public',table:'workers'},()=>this.refresh().then(rerender))
+        .on('postgres_changes',{event:'*',schema:'public',table:'sos_alerts'},()=>this.refresh().then(rerender))
+        .subscribe();
+    }catch(e){}
+  },
+  async login(u,p){
+    if(this.mode==='supabase'){
+      const {data,error}=await this.sb.rpc('ts_login',{p_user:u.trim(),p_pass:p});
+      if(error) throw error;
+      return (data&&data[0])?data[0]:null;   /* {username,role,name,serial} */
+    }
+    const a=db.accounts.find(x=>x.user===u.trim()&&x.pass===p);
+    return a?{username:a.user,role:a.role,name:a.name,serial:a.serial}:null;
+  },
+  async signup(o){
+    if(this.mode==='supabase'){
+      const {data,error}=await this.sb.rpc('ts_signup',{p_user:o.user.trim(),p_pass:o.pass,p_role:o.role,p_name:o.name.trim(),p_serial:o.serial.trim()});
+      if(error){ if(/USER_EXISTS/.test(error.message)) return {ok:false,msg:'اسم المستخدم موجود مسبقاً.'}; throw error; }
+      await this.refresh();
+      return {ok:true,acc:data&&data[0]};
+    }
+    if(db.accounts.some(x=>x.user===o.user.trim())) return {ok:false,msg:'اسم المستخدم موجود مسبقاً.'};
+    const s=o.serial.trim()||((o.role==='worker'?'TH-':'SF-')+Math.floor(10000+Math.random()*89999));
+    const a={user:o.user.trim(),pass:o.pass,role:o.role,name:o.name.trim(),serial:s};
+    db.accounts.push(a);
+    if(o.role==='worker'&&!db.workers.some(w=>w.serial===s)) db.workers.push({name:a.name,serial:s,day:'safe',week:'safe',month:'safe',status:'safe'});
+    store.set('ts_db',db);
+    return {ok:true,acc:{username:a.user,role:a.role,name:a.name,serial:a.serial}};
+  },
+  async addWorker(name,serial,level,makeAccount){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_add_worker',{p_name:name,p_serial:serial,p_level:level,p_account:!!makeAccount});
+      if(error) throw error;
+      await this.refresh();
+    }else{
+      db.workers.push({name,serial,day:level,week:level,month:level,status:level});
+      if(makeAccount&&!db.accounts.some(a=>a.user===serial.toLowerCase())) db.accounts.push({user:serial.toLowerCase(),pass:'1234',role:'worker',name,serial});
+      store.set('ts_db',db);
+    }
+  },
+  async deleteWorker(serial){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_delete_worker',{p_serial:serial});
+      if(error) throw error;
+      await this.refresh();
+    }else{
+      db.workers=db.workers.filter(w=>w.serial!==serial);
+      db.accounts=db.accounts.filter(a=>!(a.role==='worker'&&a.serial===serial));
+      store.set('ts_db',db);
+    }
+  },
+  async sendSos(o){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.from('sos_alerts').insert({serial:o.serial,name:o.name,location:o.loc});
+      if(error) throw error;
+      await this.refresh();
+    }else{
+      db.sos={serial:o.serial,name:o.name,loc:o.loc,time:new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})};
+      store.set('ts_db',db);
+    }
+  }
+};
+function reflectDbStatus(){
+  const el=document.getElementById('dbStatus'); if(!el) return;
+  if(DB.mode==='supabase') el.innerHTML='🟢 متصل بقاعدة بيانات Supabase — مزامنة لحظية للجميع';
+  else if(DB.configured()) el.innerHTML='⚠️ تعذّر الاتصال بـ Supabase — تشغيل بيانات تجريبية محلية';
+  else el.innerHTML='💾 وضع تجريبي محلي — أضف مفاتيح Supabase في config.js للربط';
+}
+function rerender(){
+  if(document.getElementById('v-specialist').classList.contains('active')) renderSpecialist();
+}
+
+const TS={
+  session(){ return store.get('ts_session',null); },
+  setSession(acc){ store.set('ts_session',{user:acc.username,role:acc.role,name:acc.name,serial:acc.serial}); },
+  logout(){ store.del('ts_session'); go('landing'); }
+};
+
+/* logo mark */
+let _logoN=0;
+function logoSVG(){
+  const id='tsG'+(++_logoN);
+  return `<svg viewBox="0 0 100 122" xmlns="http://www.w3.org/2000/svg" style="width:auto;height:100%;display:block">
+    <defs><linearGradient id="${id}" x1="69" y1="29" x2="69" y2="119" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2f86ea"/><stop offset="0.30" stop-color="#5b8fd0"/><stop offset="0.52" stop-color="#9a8ea6"/>
+      <stop offset="0.78" stop-color="#ef7a2a"/><stop offset="1" stop-color="#ec4d16"/></linearGradient></defs>
+    <path d="M4 47 C 24 9 66 3 94 21 C 70 23 54 31 47 46 L 31 46 C 22 40 12 42 4 47 Z" fill="#c7cbcf"/>
+    <rect x="28" y="44" width="22" height="74" rx="11" fill="#bdc1c7"/>
+    <rect x="57" y="29" width="24" height="90" rx="12" fill="url(#${id})"/>
+  </svg>`;
+}
+
+/* helpers */
+function toast(msg,danger){
+  let t=document.querySelector('.toast');
+  if(!t){ t=document.createElement('div'); t.className='toast'; document.body.appendChild(t); }
+  t.className='toast'+(danger?' danger':''); t.innerHTML=msg;
+  requestAnimationFrame(()=>t.classList.add('show'));
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),4200);
+}
+const AI={
+  levelFromHours(h){ if(h<10)return{key:'safe',label:'منخفض',color:'var(--safe)'}; if(h<=20)return{key:'mid',label:'متوسط',color:'var(--mid)'}; if(h<=30)return{key:'high',label:'مرتفع',color:'var(--orange)'}; return{key:'danger',label:'خطر',color:'var(--danger)'}; },
+  heatIndex(t,h){ return Math.round(t+(h-40)*0.12); },
+  workerInsights(w){
+    const lvl=this.levelFromHours(w.weekHours), hi=this.heatIndex(w.temp,w.humidity), out=[];
+    out.push({type:'info',title:'تقييم الجرعة الحرارية (HED)',text:`تحليل الذكاء الاصطناعي: إجمالي تعرّضك هذا الأسبوع ${w.weekHours} ساعة عند متوسط ${w.temp}°م ورطوبة ${w.humidity}٪. مؤشر الإجهاد الحراري المُقدّر ≈ ${hi}. تصنيفك الحالي: ${lvl.label}.`});
+    if(lvl.key==='safe') out.push({type:'info',title:'الحالة جيدة',text:'مستوى تعرّضك ضمن النطاق الآمن. استمر في شرب الماء بانتظام والالتزام بفترات الراحة.'});
+    else if(lvl.key==='mid') out.push({type:'warn',title:'انتبه',text:'اقتربت من الحد المرتفع. يوصي النظام بأخذ استراحة 15 دقيقة كل ساعتين والانتقال لأقرب محطة ترطيب.'});
+    else out.push({type:'crit',title:'تدخل مطلوب',text:'مستوى تعرّضك مرتفع/خطر. يُنصح بإيقاف العمل مؤقتاً، والانتقال لمنطقة مظللة، وإبلاغ مختص السلامة. زر SOS متاح عند الحاجة.'});
+    if(w.temp>=42) out.push({type:'warn',title:'توقّع الطقس',text:'درجة الحرارة اليوم مرتفعة. يقترح الذكاء الاصطناعي جدولة المهام الشاقة قبل 11 صباحاً وبعد 4 عصراً.'});
+    return out;
+  },
+  specialistInsights(rows){
+    const danger=rows.filter(r=>r.status==='danger'), high=rows.filter(r=>r.week==='high'||r.week==='danger'), out=[];
+    out.push({type:'info',title:'ملخص ذكي للموقع',text:`حلّل النظام ${rows.length} عمال. ${high.length} منهم بجرعة تعرّض مرتفعة أو أعلى هذا الأسبوع، و${danger.length} في المنطقة الحرجة.`});
+    if(danger.length) out.push({type:'crit',title:'أولوية قصوى',text:'العمال التالون يحتاجون تدخلاً فورياً: '+danger.map(r=>`${r.name} (${r.serial})`).join('، ')+'. يوصى بسحبهم من الموقع وتقديم الترطيب والفحص.'});
+    out.push({type:'warn',title:'توصية وقائية',text:'يقترح الذكاء الاصطناعي تدوير المناوبات للعمال ذوي التعرّض المرتفع وتكثيف محطات الترطيب في وحدة الإنتاج 3 خلال ذروة الحرارة.'});
+    return out;
+  }
+};
+function ensureModal(){
+  let back=document.querySelector('.modal-back');
+  if(!back){
+    back=document.createElement('div'); back.className='modal-back';
+    back.innerHTML=`<div class="modal"><div class="m-head"><h3 class="m-title"></h3><button class="m-close">✕</button></div>
+      <div class="ai-sub" style="color:var(--muted);font-size:13px;margin-bottom:14px"></div><div class="ai-body"></div></div>`;
+    document.body.appendChild(back);
+    back.addEventListener('click',e=>{ if(e.target===back) back.classList.remove('open'); });
+    back.querySelector('.m-close').addEventListener('click',()=>back.classList.remove('open'));
+  }
+  return back;
+}
+function showModal(title,html,subtitle){
+  const back=ensureModal();
+  back.querySelector('.m-title').innerHTML=title;
+  back.querySelector('.ai-sub').textContent=subtitle||'';
+  back.querySelector('.ai-body').innerHTML=html;
+  back.classList.add('open');
+}
+function openAI(items,subtitle){
+  const back=ensureModal();
+  back.querySelector('.m-title').innerHTML='📊 <span>تحليل ذكي فوري</span>';
+  back.querySelector('.ai-sub').textContent=subtitle||'';
+  const body=back.querySelector('.ai-body');
+  body.innerHTML='<div class="ai-typing">… يقوم الذكاء الاصطناعي بتحليل البيانات</div>';
+  back.classList.add('open');
+  setTimeout(()=>{ body.innerHTML=items.map(it=>{ const c=it.type==='crit'?'crit':it.type==='warn'?'warn':''; return `<div class="ai-item ${c}"><b>${it.title}</b>${it.text}</div>`; }).join(''); },850);
+}
+
+/* header */
+function renderHeader(showLogout,showAI){
+  const el=document.getElementById('topbar');
+  el.innerHTML=`<a class="brand" href="#" id="brandLink"><span class="logo-mark">${logoSVG()}</span><span class="word">THERM<b>A</b>SAFE</span></a>
+    <div class="topbar-actions">${showAI?'<button class="btn btn-ai" id="aiBtn">📊 تحليل ذكي فوري</button>':''}${showLogout?'<button class="btn" id="logoutBtn">تسجيل الخروج</button>':''}</div>`;
+  document.getElementById('brandLink').addEventListener('click',e=>{ e.preventDefault(); const s=TS.session(); go(s?(s.role==='worker'?'worker':'specialist'):'landing'); });
+  const lo=document.getElementById('logoutBtn'); if(lo) lo.addEventListener('click',()=>TS.logout());
+}
+
+/* ---------------- router ---------------- */
+function go(name){ location.hash=name; }
+function currentView(){ return (location.hash.replace('#','')||'landing'); }
+function route(){
+  let name=currentView();
+  const s=TS.session();
+  if((name==='worker'||name==='specialist')){
+    if(!s){ location.hash='landing'; return; }
+    if(s.role!==name){ location.hash=(s.role==='worker'?'worker':'specialist'); return; }
+  }
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const el=document.getElementById('v-'+name); if(!el){ location.hash='landing'; return; }
+  el.classList.add('active');
+  window.scrollTo(0,0);
+  document.querySelector('.sos-fab').style.display = (name==='worker')?'grid':'none';
+  if(name==='landing') renderHeader(false,false);
+  else if(name==='login'){ renderHeader(false,false); initLogin(); }
+  else if(name==='worker'){ renderHeader(true,true); initWorker(); }
+  else if(name==='specialist'){ renderHeader(true,true); initSpecialist(); }
+}
+window.addEventListener('hashchange',route);
+
+/* landing */
+document.querySelectorAll('#v-landing .role-card').forEach(c=>c.addEventListener('click',()=>{ pickedRole=c.dataset.role; go('login'); }));
+
+/* ---------------- login ---------------- */
+let _loginBound=false;
+function initLogin(){
+  document.getElementById('lgMark').innerHTML=logoSVG();
+  document.getElementById('roleChip').innerHTML=`<div class="role-chip ${pickedRole==='worker'?'orange':''}">${pickedRole==='specialist'?'🛡️':'👷'} دخول كـ: ${pickedRole==='specialist'?'مختص سلامة':'عامل'}</div>`;
+  document.getElementById('loginView').style.display='block';
+  document.getElementById('signupView').style.display='none';
+  document.getElementById('loginMsg').textContent=''; document.getElementById('signupMsg').textContent='';
+  if(_loginBound) return; _loginBound=true;
+  document.querySelectorAll('.pw-toggle').forEach(b=>b.addEventListener('click',()=>{ const t=document.getElementById(b.dataset.target); t.type=t.type==='password'?'text':'password'; }));
+  document.getElementById('toSignup').addEventListener('click',e=>{ e.preventDefault(); document.getElementById('loginView').style.display='none'; document.getElementById('signupView').style.display='block'; });
+  document.getElementById('toLogin').addEventListener('click',e=>{ e.preventDefault(); document.getElementById('signupView').style.display='none'; document.getElementById('loginView').style.display='block'; });
+  document.getElementById('forgot').addEventListener('click',e=>{ e.preventDefault(); toast('للتجربة: اسم المستخدم <b>worker</b> أو <b>specialist</b> وكلمة المرور <b>1234</b>'); });
+  const doLogin=async()=>{
+    const u=document.getElementById('lgUser').value,p=document.getElementById('lgPass').value,msg=document.getElementById('loginMsg');
+    if(!u||!p){ msg.className='hint-msg err'; msg.textContent='يرجى إدخال اسم المستخدم وكلمة المرور.'; return; }
+    msg.className='hint-msg'; msg.textContent='… جارٍ التحقق';
+    try{
+      const acc=await DB.login(u,p);
+      if(!acc || acc.role!==pickedRole){ msg.className='hint-msg err'; msg.textContent='بيانات الدخول غير صحيحة، أو نوع المستخدم لا يطابق الحساب.'; return; }
+      TS.setSession(acc);
+      msg.className='hint-msg ok'; msg.textContent='تم تسجيل الدخول ✓'; setTimeout(()=>go(acc.role),350);
+    }catch(e){ msg.className='hint-msg err'; msg.textContent='تعذّر الاتصال بقاعدة البيانات. حاول مجدداً.'; }
+  };
+  document.getElementById('loginBtn').addEventListener('click',doLogin);
+  document.getElementById('lgPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('signupBtn').addEventListener('click',async()=>{
+    const name=document.getElementById('suName').value,user=document.getElementById('suUser').value,pass=document.getElementById('suPass').value,serial=document.getElementById('suSerial').value,msg=document.getElementById('signupMsg');
+    if(!name||!user||!pass){ msg.className='hint-msg err'; msg.textContent='يرجى تعبئة الاسم واسم المستخدم وكلمة المرور.'; return; }
+    msg.className='hint-msg'; msg.textContent='… جارٍ الإنشاء';
+    try{
+      const r=await DB.signup({user,pass,role:pickedRole,name,serial});
+      if(!r.ok){ msg.className='hint-msg err'; msg.textContent=r.msg; return; }
+      TS.setSession(r.acc);
+      msg.className='hint-msg ok'; msg.textContent='تم إنشاء الحساب ✓'; setTimeout(()=>go(r.acc.role),450);
+    }catch(e){ msg.className='hint-msg err'; msg.textContent='تعذّر إنشاء الحساب. تحقق من الاتصال بقاعدة البيانات.'; }
+  });
+}
+
+/* ---------------- worker ---------------- */
+let worker=null,_workerBound=false,_wTimer=null;
+function setGauge(hours){
+  const lvl=AI.levelFromHours(hours), pct=Math.max(0,Math.min(1,hours/40)), angle=-90+pct*180, arc=283;
+  document.getElementById('gaugeArc').style.strokeDasharray=`${pct*arc} ${arc}`;
+  document.getElementById('needle').setAttribute('transform',`rotate(${angle} 100 100)`);
+  const gl=document.getElementById('gLevel'); gl.textContent=lvl.label; gl.style.color=lvl.color;
+  document.getElementById('gHours').textContent=hours+' ساعة';
+  const rl=document.getElementById('rLevel'); rl.textContent=lvl.label; rl.style.color=lvl.color;
+  document.getElementById('reportRing').style.borderColor=lvl.color;
+  document.getElementById('rHours').textContent=hours+' ساعة';
+}
+let _wRange='week';
+function applyRange(range){
+  _wRange=range;
+  document.querySelectorAll('#v-worker .tab').forEach(t=>t.classList.toggle('active',t.dataset.range===range));
+  const hours=range==='week'?worker.weekHours:worker.monthHours;
+  document.getElementById('doseTitle').textContent=`تقرير Heat Exposure Dose ${range==='week'?'لهذا الأسبوع':'لهذا الشهر'}`;
+  document.getElementById('gCap').textContent=`إجمالي التعرّض ${range==='week'?'هذا الأسبوع':'هذا الشهر'}`;
+  setGauge(hours);
+}
+function initWorker(){
+  const s=TS.session();
+  worker={name:s.name,serial:s.serial,weekHours:18,monthHours:74,temp:43,humidity:58,sensorTemp:42,sensorHum:55,working:false};
+  if(_wTimer){ clearInterval(_wTimer); _wTimer=null; }
+  document.getElementById('wName').textContent=worker.name;
+  document.getElementById('wSerial').textContent=worker.serial;
+  document.getElementById('rTemp').textContent=worker.temp+'°C';
+  document.getElementById('rHum').textContent=worker.humidity+'%';
+  document.getElementById('rRec').textContent='خذ استراحة 15 دقيقة';
+  document.getElementById('sTemp').textContent=worker.sensorTemp+'°C';
+  document.getElementById('sHum').textContent=worker.sensorHum+'%';
+  document.getElementById('sIndex').textContent='متوسط';
+  document.getElementById('startWork').textContent='▶ ابدأ العمل';
+  applyRange('week');
+  if(_workerBound) return; _workerBound=true;
+  document.querySelectorAll('#v-worker .tab').forEach(t=>t.addEventListener('click',()=>applyRange(t.dataset.range)));
+  document.getElementById('startWork').addEventListener('click',()=>{
+    worker.working=!worker.working; const b=document.getElementById('startWork');
+    if(worker.working){
+      b.textContent='⏸ إيقاف العمل'; toast('بدأ تسجيل التعرّض الحراري. النظام يراقب حالتك الآن.');
+      _wTimer=setInterval(()=>{
+        worker.weekHours++; worker.monthHours++; worker.sensorTemp=Math.min(50,worker.sensorTemp+1);
+        document.getElementById('sTemp').textContent=worker.sensorTemp+'°C'; document.getElementById('sUpd').textContent='الآن';
+        applyRange(_wRange);
+        if(AI.levelFromHours(worker.weekHours).key==='danger') toast('⚠️ تحذير: بلغت جرعة تعرّض <b>خطرة</b>. يوصى بإيقاف العمل فوراً.',true);
+      },2500);
+    } else { b.textContent='▶ ابدأ العمل'; clearInterval(_wTimer); _wTimer=null; toast('تم إيقاف تسجيل التعرّض.'); }
+  });
+  document.getElementById('goStation').addEventListener('click',()=>toast('🧭 جاري توجيهك إلى محطة الترطيب A (120 متر).'));
+  document.getElementById('downloadPdf').addEventListener('click',()=>{
+    const lvl=AI.levelFromHours(worker.weekHours);
+    const rows=[
+      ['العامل',worker.name],['الرقم التسلسلي',worker.serial],
+      ['مدة التعرّض هذا الأسبوع',worker.weekHours+' ساعة'],
+      ['درجة الحرارة',worker.temp+'°C'],['الرطوبة',worker.humidity+'%'],
+      ['مستوى الجرعة الحرارية (HED)',lvl.label],
+      ['التوصية','خذ استراحة 15 دقيقة، واشرب الماء بانتظام'],
+      ['تاريخ الإصدار',new Date().toLocaleString('ar')]
+    ];
+    const html=`<table class="data" style="text-align:right">${rows.map(([k,v])=>`<tr><td style="color:var(--muted);text-align:right">${k}</td><td style="font-weight:700;text-align:left">${v}</td></tr>`).join('')}</table>
+      <div style="text-align:center;margin-top:16px"><button class="btn" onclick="window.print()">🖨️ طباعة / حفظ PDF</button></div>`;
+    showModal('📄 تقرير السلامة الأسبوعي',html);
+  });
+  document.getElementById('sosBtn').addEventListener('click',()=>{
+    if(confirm('إرسال نداء استغاثة (SOS) إلى مختص السلامة مع موقعك الحالي؟')){
+      DB.sendSos({serial:worker.serial,name:worker.name,loc:'وحدة الإنتاج 3'})
+        .then(()=>toast('🆘 تم إرسال نداء SOS إلى مختص السلامة. ابقَ في مكان آمن.',true))
+        .catch(()=>toast('تعذّر إرسال النداء. تحقق من الاتصال.',true));
+    }
+  });
+  document.getElementById('aiBtn').addEventListener('click',()=>openAI(AI.workerInsights(worker),`تحليل حالة العامل: ${worker.name} (${worker.serial})`));
+}
+
+/* ---------------- specialist ---------------- */
+const LABELS={safe:'آمن',mid:'متوسط',high:'مرتفع',danger:'خطر'};
+const badge=l=>`<span class="badge ${l}">${LABELS[l]}</span>`;
+const statusCell=l=>{ const c=l==='safe'?'dot-safe':l==='mid'?'dot-mid':l==='high'?'dot-high':'dot-danger'; return `<span class="status-cell"><span>${LABELS[l]}</span><span class="dot ${c}"></span></span>`; };
+let _specBound=false;
+function renderSpecialist(){
+  document.getElementById('reportBody').innerHTML = db.workers.length ? db.workers.map((r,i)=>`<tr>
+      <td style="text-align:right">${r.name}</td><td>${r.serial}</td>
+      <td>${badge(r.day)}</td><td>${badge(r.week)}</td><td>${badge(r.month)}</td>
+      <td>${statusCell(r.status)}</td>
+      <td><button class="btn del-worker" data-i="${i}" title="حذف العامل" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
+    : `<tr><td colspan="7" style="color:var(--dim);padding:22px">لا يوجد عمال بعد — أضف عاملاً جديداً بزر «إضافة عامل».</td></tr>`;
+  const highRows=db.workers.filter(r=>r.week==='high'||r.week==='danger').sort((a,b)=>(b.week==='danger')-(a.week==='danger'));
+  document.getElementById('hedBody').innerHTML = highRows.length ? highRows.map(r=>`<tr><td>${r.serial}</td><td style="text-align:right">${r.name}</td><td>${badge(r.week==='danger'?'danger':'high')}</td></tr>`).join('')
+    : `<tr><td colspan="3" style="color:var(--dim)">لا يوجد</td></tr>`;
+  document.getElementById('hedCount').textContent=highRows.length;
+  if(db.sos){
+    document.getElementById('sosTitle').textContent=`تنبيه: العامل ${db.sos.name} (${db.sos.serial}) استخدم زر SOS`;
+    document.getElementById('sosTime').textContent=db.sos.time; document.getElementById('sosPlace').textContent=db.sos.loc;
+  }
+  reflectDbStatus();
+}
+function openAddWorker(){
+  const opt=(v,t)=>`<option value="${v}">${t}</option>`;
+  const html=`
+    <div class="field"><label>اسم العامل</label><div class="input-wrap"><span class="ic">👤</span><input id="awName" type="text" placeholder="مثال: سعد الغامدي"></div></div>
+    <div class="field"><label>الرقم التسلسلي (اختياري)</label><div class="input-wrap"><span class="ic">🏷️</span><input id="awSerial" type="text" placeholder="يُنشأ تلقائياً إن تُرك فارغاً"></div></div>
+    <div class="field"><label>مستوى التعرّض الحالي (HED)</label>
+      <div class="input-wrap"><span class="ic">♨️</span>
+        <select id="awLevel" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);padding:14px 0;font-size:15px;font-family:inherit">
+          ${opt('safe','آمن')}${opt('mid','متوسط')}${opt('high','مرتفع')}${opt('danger','خطر')}
+        </select></div></div>
+    <label style="display:flex;gap:10px;align-items:center;color:var(--muted);font-size:14px;margin:6px 0 16px">
+      <input type="checkbox" id="awAccount" checked> إنشاء حساب دخول لهذا العامل (اسم المستخدم = الرقم التسلسلي، كلمة المرور: 1234)
+    </label>
+    <button class="btn btn-orange btn-block" id="awSave">حفظ العامل</button>
+    <div class="hint-msg" id="awMsg"></div>`;
+  showModal('➕ إضافة عامل جديد',html);
+  const back=document.querySelector('.modal-back');
+  back.querySelector('#awSave').addEventListener('click',async()=>{
+    const name=back.querySelector('#awName').value.trim(), msg=back.querySelector('#awMsg'), btn=back.querySelector('#awSave');
+    if(!name){ msg.className='hint-msg err'; msg.textContent='يرجى إدخال اسم العامل.'; return; }
+    const serial=back.querySelector('#awSerial').value.trim()||('TH-'+Math.floor(10000+Math.random()*89999));
+    if(db.workers.some(w=>w.serial===serial)){ msg.className='hint-msg err'; msg.textContent='الرقم التسلسلي مستخدم مسبقاً.'; return; }
+    const lvl=back.querySelector('#awLevel').value, makeAcc=back.querySelector('#awAccount').checked;
+    btn.disabled=true; msg.className='hint-msg'; msg.textContent='… جارٍ الحفظ';
+    try{
+      await DB.addWorker(name,serial,lvl,makeAcc);
+      renderSpecialist();
+      back.classList.remove('open');
+      toast(`تمت إضافة العامل ${name} ✓`);
+    }catch(e){ msg.className='hint-msg err'; msg.textContent='تعذّر الحفظ في قاعدة البيانات.'; btn.disabled=false; }
+  });
+}
+function initSpecialist(){
+  renderSpecialist();
+  if(_specBound) return; _specBound=true;
+  document.getElementById('addWorkerBtn').addEventListener('click',openAddWorker);
+  document.getElementById('reportBody').addEventListener('click',e=>{
+    const btn=e.target.closest('.del-worker'); if(!btn) return;
+    const i=+btn.dataset.i, w=db.workers[i]; if(!w) return;
+    if(confirm(`حذف العامل «${w.name}» (${w.serial})؟`)){
+      DB.deleteWorker(w.serial)
+        .then(()=>{ renderSpecialist(); toast('تم حذف العامل.'); })
+        .catch(()=>toast('تعذّر حذف العامل من قاعدة البيانات.',true));
+    }
+  });
+  document.getElementById('sosLoc').addEventListener('click',()=>toast('🗺️ عرض موقع العامل على الخريطة: '+document.getElementById('sosPlace').textContent));
+  document.getElementById('showAllHigh').addEventListener('click',()=>{ const n=db.workers.filter(r=>r.week==='high'||r.week==='danger').length; toast('عدد العمال ذوي التعرّض المرتفع/الخطر: '+n+'.'); });
+  document.getElementById('aiBtn').addEventListener('click',()=>openAI(AI.specialistInsights(db.workers),'تحليل ذكي لجميع عمال الموقع'));
+}
+
+/* ---------------- boot ---------------- */
+async function boot(){
+  document.getElementById('heroMark').innerHTML=logoSVG();
+  if(!location.hash) location.hash='landing';
+  route();
+  await DB.init();
+}
+boot();
+</script>
