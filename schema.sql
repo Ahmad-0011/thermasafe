@@ -8,17 +8,27 @@
 drop table if exists public.sos_alerts cascade;
 drop table if exists public.accounts  cascade;
 drop table if exists public.workers   cascade;
+drop table if exists public.settings  cascade;
 
 -- ---------- الجداول ----------
 create table if not exists public.workers (
-  id         bigint generated always as identity primary key,
-  name       text not null,
-  serial     text unique not null,
-  day        text not null default 'safe',
-  week       text not null default 'safe',
-  month      text not null default 'safe',
-  status     text not null default 'safe',
-  created_at timestamptz not null default now()
+  id          bigint generated always as identity primary key,
+  name        text not null,
+  serial      text unique not null,
+  day         text not null default 'safe',
+  week        text not null default 'safe',
+  month       text not null default 'safe',
+  status      text not null default 'safe',
+  temperature numeric,
+  humidity    numeric,
+  temp_at     timestamptz,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists public.settings (
+  id             int primary key default 1,
+  temp_threshold numeric not null default 38,
+  constraint settings_single_row check (id = 1)
 );
 
 create table if not exists public.accounts (
@@ -42,10 +52,15 @@ create table if not exists public.sos_alerts (
 alter table public.workers    enable row level security;
 alter table public.accounts   enable row level security;
 alter table public.sos_alerts enable row level security;
+alter table public.settings   enable row level security;
 
 -- workers: القراءة متاحة للجميع (التعديل يتم فقط عبر الدوال الآمنة أدناه)
 drop policy if exists workers_read on public.workers;
 create policy workers_read on public.workers for select using (true);
+
+-- settings: القراءة متاحة للجميع (التعديل عبر الدالة الآمنة)
+drop policy if exists settings_read on public.settings;
+create policy settings_read on public.settings for select using (true);
 
 -- sos_alerts: القراءة والإضافة متاحة (عامل يرسل نداء، مختص يقرأه)
 drop policy if exists sos_read   on public.sos_alerts;
@@ -114,11 +129,32 @@ begin
 end;
 $$;
 
+-- تحديث حدّ الحرارة (يستخدمه المختص)
+create or replace function public.ts_set_threshold(p_val numeric)
+returns void language sql security definer set search_path = public as $$
+  update public.settings set temp_threshold = p_val where id = 1;
+$$;
+
+-- تحديث حرارة العامل (يستخدمه ESP + حساس DHT11) بالرقم التسلسلي
+create or replace function public.ts_update_temp(p_serial text, p_temp numeric, p_hum numeric)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.workers set temperature = p_temp, humidity = p_hum, temp_at = now()
+   where serial = p_serial;
+  if not found then
+    insert into public.workers(name, serial, temperature, humidity, temp_at, day, week, month, status)
+    values ('عامل ' || p_serial, p_serial, p_temp, p_hum, now(), 'safe','safe','safe','safe');
+  end if;
+end;
+$$;
+
 -- منح صلاحية تنفيذ الدوال لمستخدم الواجهة (anon) والمستخدمين المسجّلين
 grant execute on function public.ts_login(text,text)                         to anon, authenticated;
 grant execute on function public.ts_signup(text,text,text,text,text)         to anon, authenticated;
 grant execute on function public.ts_add_worker(text,text,text,boolean)       to anon, authenticated;
 grant execute on function public.ts_delete_worker(text)                      to anon, authenticated;
+grant execute on function public.ts_set_threshold(numeric)                   to anon, authenticated;
+grant execute on function public.ts_update_temp(text,numeric,numeric)        to anon, authenticated;
 
 -- ---------- المزامنة اللحظية (Realtime) ----------
 -- مُحصّن ضد إعادة التشغيل: لا يُضيف الجدول إن كان موجوداً في النشر مسبقاً
@@ -132,9 +168,16 @@ begin
                  where pubname='supabase_realtime' and schemaname='public' and tablename='sos_alerts') then
     alter publication supabase_realtime add table public.sos_alerts;
   end if;
+  if not exists (select 1 from pg_publication_tables
+                 where pubname='supabase_realtime' and schemaname='public' and tablename='settings') then
+    alter publication supabase_realtime add table public.settings;
+  end if;
 end $$;
 
 -- ---------- بيانات ابتدائية (Seed) ----------
+insert into public.settings(id, temp_threshold) values (1, 38)
+on conflict (id) do nothing;
+
 insert into public.accounts(username, password, role, name, serial) values
   ('worker',     '1234', 'worker',     'محمد أحمد العتيبي', 'TH-20481'),
   ('specialist', '1234', 'specialist', 'م. خالد الدوسري',   'SF-1001')

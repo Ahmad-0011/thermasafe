@@ -189,6 +189,17 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
   padding:16px 36px;border-radius:14px;cursor:pointer;box-shadow:0 14px 34px rgba(0,0,0,.4);transition:.15s;}
 .sos-ov-btn:hover{transform:scale(1.04);}
 
+/* شارة حرارة العامل + بانر تحذير الحرارة */
+.temp-badge{display:none;align-items:center;gap:4px;margin-inline-start:10px;padding:3px 12px;border-radius:20px;
+  font-size:15px;font-weight:800;vertical-align:middle;
+  background:rgba(46,196,182,.12);border:1px solid rgba(46,196,182,.45);color:var(--teal-soft);}
+.temp-badge.hot{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.55);color:#ff7676;animation:pulse 1.4s infinite;}
+.temp-warn{border:1px solid rgba(244,196,48,.55);background:rgba(244,196,48,.09);color:#ffd98a;
+  border-radius:12px;padding:13px 16px;margin-bottom:14px;line-height:1.8;font-size:14px;}
+.thresh-box{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);flex-wrap:wrap;}
+.thresh-box input{width:74px;background:rgba(8,16,30,.6);border:1px solid var(--line);border-radius:8px;
+  color:var(--text);padding:8px;font-family:inherit;text-align:center;font-size:15px;}
+
 .modal-back{position:fixed;inset:0;z-index:60;background:rgba(4,9,18,.72);backdrop-filter:blur(4px);display:none;place-items:center;padding:20px;}
 .modal-back.open{display:grid;}
 .modal{width:100%;max-width:560px;background:linear-gradient(180deg,var(--card-2),var(--card));border:1px solid var(--line-strong);border-radius:18px;padding:26px;box-shadow:var(--shadow);max-height:86vh;overflow-y:auto;}
@@ -301,7 +312,7 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
 
     <div class="card">
       <div class="grid-2">
-        <div class="mini-field"><div class="lbl">اسم العامل</div><div class="val-box"><span id="wName">—</span><span class="ic">👤</span></div></div>
+        <div class="mini-field"><div class="lbl">اسم العامل</div><div class="val-box"><span><span id="wName">—</span><span class="temp-badge" id="wTempBadge"></span></span><span class="ic">👤</span></div></div>
         <div class="mini-field"><div class="lbl">الرقم التسلسلي</div><div class="val-box"><span id="wSerial">—</span><span class="ic">🏷️</span></div></div>
       </div>
     </div>
@@ -390,13 +401,19 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
         <span><span class="d dot-danger"></span> خطر</span><span><span class="d dot-high"></span> مرتفع</span>
         <span><span class="d dot-mid"></span> متوسط</span><span><span class="d dot-safe"></span> آمن</span>
       </div>
-      <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
         <button class="btn btn-orange" id="addWorkerBtn" style="padding:10px 16px">➕ إضافة عامل</button>
+        <div class="thresh-box">
+          🌡️ حد الحرارة للتحذير:
+          <input id="threshInput" type="number" min="20" max="60" step="0.5" value="38"> °C
+          <button class="btn" id="threshSave" style="padding:8px 14px">حفظ</button>
+        </div>
         <span id="dbStatus" style="font-size:12px;color:var(--dim)"></span>
       </div>
+      <div id="tempWarn"></div>
       <div class="table-wrap"><table class="data">
         <thead>
-          <tr class="grp"><th rowspan="2">اسم العامل</th><th rowspan="2">رقم تسلسلي</th><th colspan="3">Heat Exposure Dose</th><th rowspan="2">الحالة</th><th rowspan="2">حذف</th></tr>
+          <tr class="grp"><th rowspan="2">اسم العامل</th><th rowspan="2">رقم تسلسلي</th><th colspan="3">Heat Exposure Dose</th><th rowspan="2">🌡️ الحرارة</th><th rowspan="2">الحالة</th><th rowspan="2">حذف</th></tr>
           <tr class="grp"><th>اليوم</th><th>هذا الأسبوع</th><th>هذا الشهر</th></tr>
         </thead>
         <tbody id="reportBody"></tbody>
@@ -454,7 +471,8 @@ function seedDB(){ return {
     {name:'فهد عبدالله عسيري',serial:'TH-15092',day:'high',week:'high',month:'danger',status:'danger'},
     {name:'ناصر محمد آل دليم',serial:'TH-13457',day:'danger',week:'danger',month:'danger',status:'danger'}
   ],
-  sos:null
+  sos:null,
+  threshold:38
 }; }
 let db=seedDB();
 let pickedRole='worker';
@@ -483,24 +501,33 @@ const DB={
     reflectDbStatus(); rerender();
   },
   async refresh(){
-    const [w,s]=await Promise.all([
+    const [w,s,st]=await Promise.all([
       this.sb.from('workers').select('*').order('id'),
-      this.sb.from('sos_alerts').select('*').order('id',{ascending:false}).limit(1)
+      this.sb.from('sos_alerts').select('*').order('id',{ascending:false}).limit(1),
+      this.sb.from('settings').select('temp_threshold').eq('id',1).limit(1)
     ]);
     if(w.error) throw w.error;
-    db.workers=(w.data||[]).map(r=>({name:r.name,serial:r.serial,day:r.day,week:r.week,month:r.month,status:r.status}));
+    db.workers=(w.data||[]).map(r=>({name:r.name,serial:r.serial,day:r.day,week:r.week,month:r.month,status:r.status,temperature:r.temperature,humidity:r.humidity,temp_at:r.temp_at}));
     if(!s.error && s.data && s.data[0]){
       const a=s.data[0];
       db.sos={serial:a.serial,name:a.name,loc:a.location,time:new Date(a.created_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})};
     }
+    if(st && !st.error && st.data && st.data[0] && st.data[0].temp_threshold!=null) db.threshold=Number(st.data[0].temp_threshold);
   },
   subscribe(){
     try{
       this.sb.channel('ts-realtime')
         .on('postgres_changes',{event:'*',schema:'public',table:'workers'},()=>this.refresh().then(rerender))
+        .on('postgres_changes',{event:'*',schema:'public',table:'settings'},()=>this.refresh().then(rerender))
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'sos_alerts'},(p)=>{ this.refresh().then(rerender); onSosAlert(p&&p.new); })
         .subscribe();
     }catch(e){}
+  },
+  async setThreshold(val){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_set_threshold',{p_val:val});
+      if(error) throw error; db.threshold=val;
+    }else{ db.threshold=val; store.set('ts_db',db); }
   },
   async login(u,p){
     if(this.mode==='supabase'){
@@ -567,6 +594,7 @@ function reflectDbStatus(){
 }
 function rerender(){
   if(document.getElementById('v-specialist').classList.contains('active')) renderSpecialist();
+  if(document.getElementById('v-worker').classList.contains('active')) updateWorkerTemp();
 }
 /* نداء استغاثة وارد (من عامل أو من زر ESP) */
 function playBeep(freq){
@@ -802,6 +830,7 @@ function initWorker(){
   if(_wTimer){ clearInterval(_wTimer); _wTimer=null; }
   document.getElementById('wName').textContent=worker.name;
   document.getElementById('wSerial').textContent=worker.serial;
+  updateWorkerTemp();
   document.getElementById('rTemp').textContent=worker.temp+'°C';
   document.getElementById('rHum').textContent=worker.humidity+'%';
   document.getElementById('rRec').textContent='خذ استراحة 15 دقيقة';
@@ -849,18 +878,48 @@ function initWorker(){
   document.getElementById('aiBtn').addEventListener('click',()=>openAI(AI.workerInsights(worker),`تحليل حالة العامل: ${worker.name} (${worker.serial})`));
 }
 
+/* حرارة العامل (من DHT11 عبر ESP) — تظهر جنب اسمه */
+function fmtTemp(t){ return t==null?'—':(Math.round(Number(t)*10)/10)+'°C'; }
+function updateWorkerTemp(){
+  const s=TS.session(); const badge=document.getElementById('wTempBadge'); if(!s||!badge) return;
+  const row=db.workers.find(w=>w.serial===s.serial);
+  const th=db.threshold||38;
+  if(row && row.temperature!=null){
+    const t=Number(row.temperature), hot=t>=th;
+    badge.style.display='inline-flex';
+    badge.className='temp-badge'+(hot?' hot':'');
+    badge.innerHTML='🌡️ '+fmtTemp(t);
+    const st=document.getElementById('sTemp'); if(st) st.textContent=fmtTemp(t);
+    if(row.humidity!=null){ const sh=document.getElementById('sHum'); if(sh) sh.textContent=Math.round(Number(row.humidity))+'%'; }
+    const su=document.getElementById('sUpd'); if(su && row.temp_at) su.textContent=new Date(row.temp_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'});
+    const si=document.getElementById('sIndex'); if(si && hot){ si.textContent='مرتفع'; si.style.color='#ff7676'; }
+  }else{ badge.style.display='none'; }
+}
+
 /* ---------------- specialist ---------------- */
 const LABELS={safe:'آمن',mid:'متوسط',high:'مرتفع',danger:'خطر'};
 const badge=l=>`<span class="badge ${l}">${LABELS[l]}</span>`;
 const statusCell=l=>{ const c=l==='safe'?'dot-safe':l==='mid'?'dot-mid':l==='high'?'dot-high':'dot-danger'; return `<span class="status-cell"><span>${LABELS[l]}</span><span class="dot ${c}"></span></span>`; };
 let _specBound=false;
+const _tempAlerted=new Set();
+function tempCell(t,th){ if(t==null) return '<span style="color:var(--dim)">—</span>'; const hot=Number(t)>=th; return `<span style="font-weight:800;color:${hot?'#ff7676':'var(--text)'}">${fmtTemp(t)}${hot?' 🔥':''}</span>`; }
 function renderSpecialist(){
+  const th=db.threshold||38;
   document.getElementById('reportBody').innerHTML = db.workers.length ? db.workers.map((r,i)=>`<tr>
       <td style="text-align:right">${r.name}</td><td>${r.serial}</td>
       <td>${badge(r.day)}</td><td>${badge(r.week)}</td><td>${badge(r.month)}</td>
+      <td>${tempCell(r.temperature,th)}</td>
       <td>${statusCell(r.status)}</td>
       <td><button class="btn del-worker" data-i="${i}" title="حذف العامل" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
-    : `<tr><td colspan="7" style="color:var(--dim);padding:22px">لا يوجد عمال بعد — أضف عاملاً جديداً بزر «إضافة عامل».</td></tr>`;
+    : `<tr><td colspan="8" style="color:var(--dim);padding:22px">لا يوجد عمال بعد — أضف عاملاً جديداً بزر «إضافة عامل».</td></tr>`;
+  /* تحذير الحرارة: العمال المتجاوزون للحد */
+  const over=db.workers.filter(w=>w.temperature!=null && Number(w.temperature)>=th);
+  const tw=document.getElementById('tempWarn');
+  if(tw) tw.innerHTML = over.length ? `<div class="temp-warn">⚠️ <b>تحذير حرارة:</b> تجاوز الحد (${th}°C): `+over.map(w=>`${w.name} — <b>${fmtTemp(w.temperature)}</b>`).join('، ')+`</div>` : '';
+  const ti=document.getElementById('threshInput'); if(ti && document.activeElement!==ti) ti.value=th;
+  /* تنبيه صوتي لمرة واحدة عند تجاوز عامل الحد */
+  over.forEach(w=>{ if(!_tempAlerted.has(w.serial)){ _tempAlerted.add(w.serial); const ss=TS.session(); if(ss&&ss.role==='specialist') toast('🌡️ تحذير: حرارة العامل <b>'+w.name+'</b> بلغت '+fmtTemp(w.temperature)+' (الحد '+th+'°C)',true); } });
+  _tempAlerted.forEach(sr=>{ if(!over.some(w=>w.serial===sr)) _tempAlerted.delete(sr); });
   const highRows=db.workers.filter(r=>r.week==='high'||r.week==='danger').sort((a,b)=>(b.week==='danger')-(a.week==='danger'));
   document.getElementById('hedBody').innerHTML = highRows.length ? highRows.map(r=>`<tr><td>${r.serial}</td><td style="text-align:right">${r.name}</td><td>${badge(r.week==='danger'?'danger':'high')}</td></tr>`).join('')
     : `<tr><td colspan="3" style="color:var(--dim)">لا يوجد</td></tr>`;
@@ -907,6 +966,12 @@ function initSpecialist(){
   renderSpecialist();
   if(_specBound) return; _specBound=true;
   document.getElementById('addWorkerBtn').addEventListener('click',openAddWorker);
+  document.getElementById('threshInput').value=db.threshold||38;
+  document.getElementById('threshSave').addEventListener('click',()=>{
+    const v=parseFloat(document.getElementById('threshInput').value);
+    if(isNaN(v)||v<20||v>60){ toast('أدخل قيمة بين 20 و 60 درجة.',true); return; }
+    DB.setThreshold(v).then(()=>{ renderSpecialist(); toast('تم تحديث حد الحرارة إلى '+v+'°C ✓'); }).catch(()=>toast('تعذّر حفظ الحد في قاعدة البيانات.',true));
+  });
   document.getElementById('reportBody').addEventListener('click',e=>{
     const btn=e.target.closest('.del-worker'); if(!btn) return;
     const i=+btn.dataset.i, w=db.workers[i]; if(!w) return;
