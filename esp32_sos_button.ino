@@ -24,8 +24,8 @@ const char* SUPABASE_URL = "https://uwpycowwylwjwezzxdfk.supabase.co";
 const char* SUPABASE_KEY = "sb_publishable_bTFs7B21uBVzGo7SrhGfMQ_QfZydCA0"; // مفتاح publishable آمن
 
 // ------------------ 3) هوية العامل/الخوذة (عدّلها) ------------------
-const char* WORKER_SERIAL = "TH-13457";
-const char* WORKER_NAME   = "عامل الميدان";
+const char* WORKER_SERIAL = "TH-20481";
+const char* WORKER_NAME   = "محمد أحمد العتيبي";
 const char* WORKER_LOC    = "وحدة الإنتاج 3";
 
 // ------------------ 4) الأطراف (Pins) ------------------

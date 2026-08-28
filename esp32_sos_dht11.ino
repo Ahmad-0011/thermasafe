@@ -24,8 +24,8 @@ const char* SUPABASE_URL = "https://uwpycowwylwjwezzxdfk.supabase.co";
 const char* SUPABASE_KEY = "sb_publishable_bTFs7B21uBVzGo7SrhGfMQ_QfZydCA0";
 
 // ------------------ 3) هوية العامل/الخوذة (عدّلها) ------------------
-const char* WORKER_SERIAL = "TH-13457";
-const char* WORKER_NAME   = "عامل الميدان";
+const char* WORKER_SERIAL = "TH-20481";           // رقم عامل موجود في قاعدة البيانات
+const char* WORKER_NAME   = "محمد أحمد العتيبي";
 const char* WORKER_LOC    = "وحدة الإنتاج 3";
 
 // ------------------ 4) الأطراف (Pins) ------------------
@@ -39,7 +39,7 @@ DHT dht(DHT_PIN, DHT_TYPE);
 bool lastBtn = HIGH;
 unsigned long lastSend = 0;
 unsigned long lastTemp = 0;
-const unsigned long TEMP_EVERY = 15000;   // إرسال الحرارة كل 15 ثانية
+const unsigned long TEMP_EVERY = 4000;    // إرسال الحرارة كل 4 ثوانٍ (أسرع)
 
 void connectWiFi() {
   WiFi.mode(WIFI_STA);

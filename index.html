@@ -408,12 +408,17 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
           <input id="threshInput" type="number" min="20" max="60" step="0.5" value="38"> °C
           <button class="btn" id="threshSave" style="padding:8px 14px">حفظ</button>
         </div>
+        <div class="thresh-box">
+          🏙️ حرارة المدينة:
+          <input id="cityInput" type="number" min="0" max="60" step="0.5" value="40"> °C
+          <button class="btn" id="citySave" style="padding:8px 14px">حفظ</button>
+        </div>
         <span id="dbStatus" style="font-size:12px;color:var(--dim)"></span>
       </div>
       <div id="tempWarn"></div>
       <div class="table-wrap"><table class="data">
         <thead>
-          <tr class="grp"><th rowspan="2">اسم العامل</th><th rowspan="2">رقم تسلسلي</th><th colspan="3">Heat Exposure Dose</th><th rowspan="2">🌡️ الحرارة</th><th rowspan="2">الحالة</th><th rowspan="2">حذف</th></tr>
+          <tr class="grp"><th rowspan="2">اسم العامل</th><th rowspan="2">رقم تسلسلي</th><th colspan="3">Heat Exposure Dose</th><th rowspan="2">🌡️ الحرارة</th><th rowspan="2">الحالة</th><th rowspan="2">التقرير</th><th rowspan="2">حذف</th></tr>
           <tr class="grp"><th>اليوم</th><th>هذا الأسبوع</th><th>هذا الشهر</th></tr>
         </thead>
         <tbody id="reportBody"></tbody>
@@ -441,7 +446,7 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
           <div class="num" id="hedCount">7</div><div class="cap">عمال</div><div class="cap2">خلال هذا الأسبوع</div>
         </div>
         <div class="table-wrap">
-          <table class="data"><thead><tr><th>الرقم التسلسلي</th><th>اسم العامل</th><th>HED</th></tr></thead><tbody id="hedBody"></tbody></table>
+          <table class="data"><thead><tr><th>الرقم التسلسلي</th><th>اسم العامل</th><th>🌡️ الحرارة</th><th>HED</th></tr></thead><tbody id="hedBody"></tbody></table>
           <button class="btn btn-block" id="showAllHigh" style="margin-top:14px">👥 عرض جميع المبلّغين المرتفعين</button>
         </div>
       </div>
@@ -465,14 +470,13 @@ function seedDB(){ return {
     {user:'specialist',pass:'1234',role:'specialist',name:'م. خالد الدوسري',serial:'SF-1001'}
   ],
   workers:[
-    {name:'محمد أحمد العتيبي',serial:'TH-20481',day:'mid',week:'high',month:'danger',status:'safe'},
-    {name:'سالم ناصر القحطاني',serial:'TH-19872',day:'safe',week:'mid',month:'high',status:'mid'},
-    {name:'أحمد علي الشهري',serial:'TH-17635',day:'mid',week:'mid',month:'high',status:'mid'},
-    {name:'فهد عبدالله عسيري',serial:'TH-15092',day:'high',week:'high',month:'danger',status:'danger'},
-    {name:'ناصر محمد آل دليم',serial:'TH-13457',day:'danger',week:'danger',month:'danger',status:'danger'}
+    {name:'محمد أحمد العتيبي',serial:'TH-20481',owner:'specialist',day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'سالم ناصر القحطاني',serial:'TH-19872',owner:'specialist',day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'أحمد علي الشهري',serial:'TH-17635',owner:'specialist',day:'safe',week:'safe',month:'safe',status:'safe'}
   ],
   sos:null,
-  threshold:38
+  threshold:38,
+  city:40
 }; }
 let db=seedDB();
 let pickedRole='worker';
@@ -504,15 +508,18 @@ const DB={
     const [w,s,st]=await Promise.all([
       this.sb.from('workers').select('*').order('id'),
       this.sb.from('sos_alerts').select('*').order('id',{ascending:false}).limit(1),
-      this.sb.from('settings').select('temp_threshold').eq('id',1).limit(1)
+      this.sb.from('settings').select('temp_threshold,city_temp').eq('id',1).limit(1)
     ]);
     if(w.error) throw w.error;
-    db.workers=(w.data||[]).map(r=>({name:r.name,serial:r.serial,day:r.day,week:r.week,month:r.month,status:r.status,temperature:r.temperature,humidity:r.humidity,temp_at:r.temp_at}));
+    db.workers=(w.data||[]).map(r=>({name:r.name,serial:r.serial,owner:r.owner,day:r.day,week:r.week,month:r.month,status:r.status,temperature:r.temperature,humidity:r.humidity,temp_at:r.temp_at,dose_week:r.dose_week,dose_month:r.dose_month}));
     if(!s.error && s.data && s.data[0]){
       const a=s.data[0];
       db.sos={serial:a.serial,name:a.name,loc:a.location,time:new Date(a.created_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})};
     }
-    if(st && !st.error && st.data && st.data[0] && st.data[0].temp_threshold!=null) db.threshold=Number(st.data[0].temp_threshold);
+    if(st && !st.error && st.data && st.data[0]){
+      if(st.data[0].temp_threshold!=null) db.threshold=Number(st.data[0].temp_threshold);
+      if(st.data[0].city_temp!=null) db.city=Number(st.data[0].city_temp);
+    }
   },
   subscribe(){
     /* قناة أساسية: العمال + نداءات SOS (معزولة حتى لا يكسرها أي جدول آخر) */
@@ -534,6 +541,12 @@ const DB={
       const {error}=await this.sb.rpc('ts_set_threshold',{p_val:val});
       if(error) throw error; db.threshold=val;
     }else{ db.threshold=val; store.set('ts_db',db); }
+  },
+  async setCity(val){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_set_city',{p_val:val});
+      if(error) throw error; db.city=val;
+    }else{ db.city=val; store.set('ts_db',db); }
   },
   async login(u,p){
     if(this.mode==='supabase'){
@@ -559,13 +572,13 @@ const DB={
     store.set('ts_db',db);
     return {ok:true,acc:{username:a.user,role:a.role,name:a.name,serial:a.serial}};
   },
-  async addWorker(name,serial,level,makeAccount){
+  async addWorker(name,serial,level,makeAccount,owner){
     if(this.mode==='supabase'){
-      const {error}=await this.sb.rpc('ts_add_worker',{p_name:name,p_serial:serial,p_level:level,p_account:!!makeAccount});
+      const {error}=await this.sb.rpc('ts_add_worker',{p_name:name,p_serial:serial,p_level:level,p_account:!!makeAccount,p_owner:owner||null});
       if(error) throw error;
       await this.refresh();
     }else{
-      db.workers.push({name,serial,day:level,week:level,month:level,status:level});
+      db.workers.push({name,serial,owner,day:level,week:level,month:level,status:level});
       if(makeAccount&&!db.accounts.some(a=>a.user===serial.toLowerCase())) db.accounts.push({user:serial.toLowerCase(),pass:'1234',role:'worker',name,serial});
       store.set('ts_db',db);
     }
@@ -817,8 +830,6 @@ function setGauge(hours){
   document.getElementById('needle').setAttribute('transform',`rotate(${angle} 100 100)`);
   const gl=document.getElementById('gLevel'); gl.textContent=lvl.label; gl.style.color=lvl.color;
   document.getElementById('gHours').textContent=hours+' ساعة';
-  const rl=document.getElementById('rLevel'); rl.textContent=lvl.label; rl.style.color=lvl.color;
-  document.getElementById('reportRing').style.borderColor=lvl.color;
   document.getElementById('rHours').textContent=hours+' ساعة';
 }
 let _wRange='week';
@@ -836,7 +847,6 @@ function initWorker(){
   if(_wTimer){ clearInterval(_wTimer); _wTimer=null; }
   document.getElementById('wName').textContent=worker.name;
   document.getElementById('wSerial').textContent=worker.serial;
-  updateWorkerTemp();
   document.getElementById('rTemp').textContent=worker.temp+'°C';
   document.getElementById('rHum').textContent=worker.humidity+'%';
   document.getElementById('rRec').textContent='خذ استراحة 15 دقيقة';
@@ -845,6 +855,7 @@ function initWorker(){
   document.getElementById('sIndex').textContent='متوسط';
   document.getElementById('startWork').textContent='▶ ابدأ العمل';
   applyRange('week');
+  updateWorkerTemp();   /* يستبدل القيم التجريبية ببيانات الحساس الحقيقية إن وُجدت */
   if(_workerBound) return; _workerBound=true;
   document.querySelectorAll('#v-worker .tab').forEach(t=>t.addEventListener('click',()=>applyRange(t.dataset.range)));
   document.getElementById('startWork').addEventListener('click',()=>{
@@ -884,8 +895,9 @@ function initWorker(){
   document.getElementById('aiBtn').addEventListener('click',()=>openAI(AI.workerInsights(worker),`تحليل حالة العامل: ${worker.name} (${worker.serial})`));
 }
 
-/* حرارة العامل (من DHT11 عبر ESP) — تظهر جنب اسمه */
+/* حرارة العامل (من DHT11 عبر ESP) — تظهر جنب اسمه، والحالة تتغير حسبها */
 function fmtTemp(t){ return t==null?'—':(Math.round(Number(t)*10)/10)+'°C'; }
+function statusColor(st){ return st==='danger'?'var(--danger)':st==='high'?'var(--orange)':st==='mid'?'var(--mid)':'var(--safe)'; }
 function updateWorkerTemp(){
   const s=TS.session(); const badge=document.getElementById('wTempBadge'); if(!s||!badge) return;
   const row=db.workers.find(w=>w.serial===s.serial);
@@ -896,10 +908,38 @@ function updateWorkerTemp(){
     badge.className='temp-badge'+(hot?' hot':'');
     badge.innerHTML='🌡️ '+fmtTemp(t);
     const st=document.getElementById('sTemp'); if(st) st.textContent=fmtTemp(t);
-    if(row.humidity!=null){ const sh=document.getElementById('sHum'); if(sh) sh.textContent=Math.round(Number(row.humidity))+'%'; }
+    const rt=document.getElementById('rTemp'); if(rt) rt.textContent=fmtTemp(t);
+    if(row.humidity!=null){ const hv=Math.round(Number(row.humidity))+'%'; const sh=document.getElementById('sHum'); if(sh) sh.textContent=hv; const rh=document.getElementById('rHum'); if(rh) rh.textContent=hv; }
     const su=document.getElementById('sUpd'); if(su && row.temp_at) su.textContent=new Date(row.temp_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'});
-    const si=document.getElementById('sIndex'); if(si && hot){ si.textContent='مرتفع'; si.style.color='#ff7676'; }
   }else{ badge.style.display='none'; }
+  /* الحالة اللحظية على حلقة تقرير السلامة + مؤشر الإجهاد */
+  if(row && row.status){
+    const col=statusColor(row.status), lab=(LABELS[row.status]||'—');
+    const rl=document.getElementById('rLevel'); if(rl){ rl.textContent=lab; rl.style.color=col; }
+    const ring=document.getElementById('reportRing'); if(ring) ring.style.borderColor=col;
+    const si=document.getElementById('sIndex'); if(si){ si.textContent=lab; si.style.color=col; }
+    const rr=document.getElementById('rRec'); if(rr) rr.textContent = row.status==='danger'?'أوقف العمل فوراً':row.status==='high'?'استراحة كل ساعة':row.status==='mid'?'راقب حالتك':'الوضع آمن';
+  }
+}
+function openWorkerReport(w){
+  const rec = w.status==='danger'?'إيقاف العمل فوراً والانتقال لمكان مظلل مع الترطيب':
+              w.status==='high'?'استراحة 15 دقيقة كل ساعة وشرب الماء بانتظام':
+              w.status==='mid'?'مراقبة الحالة وأخذ فترات راحة دورية':
+              'الوضع آمن — متابعة اعتيادية';
+  const rows=[
+    ['اسم العامل',w.name],['الرقم التسلسلي',w.serial],
+    ['الحرارة الحالية', fmtTemp(w.temperature)],
+    ['آخر تحديث', w.temp_at?new Date(w.temp_at).toLocaleString('ar'):'—'],
+    ['الحالة الآن', LABELS[w.status]||'—'],
+    ['تقرير اليوم', LABELS[w.day]||'—'],
+    ['التقرير الأسبوعي', LABELS[w.week]||'—'],
+    ['التقرير الشهري', LABELS[w.month]||'—'],
+    ['الجرعة الأسبوعية (نقاط)', w.dose_week!=null?Math.round(Number(w.dose_week)):'—'],
+    ['الجرعة الشهرية (نقاط)', w.dose_month!=null?Math.round(Number(w.dose_month)):'—'],
+    ['التوصية', rec]
+  ];
+  const html=`<table class="data" style="text-align:right">${rows.map(([k,v])=>`<tr><td style="color:var(--muted);text-align:right">${k}</td><td style="font-weight:700;text-align:left">${v}</td></tr>`).join('')}</table>`;
+  showModal('📄 تقرير العامل: '+w.name, html);
 }
 
 /* ---------------- specialist ---------------- */
@@ -909,26 +949,34 @@ const statusCell=l=>{ const c=l==='safe'?'dot-safe':l==='mid'?'dot-mid':l==='hig
 let _specBound=false;
 const _tempAlerted=new Set();
 function tempCell(t,th){ if(t==null) return '<span style="color:var(--dim)">—</span>'; const hot=Number(t)>=th; return `<span style="font-weight:800;color:${hot?'#ff7676':'var(--text)'}">${fmtTemp(t)}${hot?' 🔥':''}</span>`; }
+function myWorkers(){
+  const s=TS.session();
+  if(!s) return db.workers;
+  return db.workers.filter(w=>w.owner===s.user);
+}
 function renderSpecialist(){
   const th=db.threshold||38;
-  document.getElementById('reportBody').innerHTML = db.workers.length ? db.workers.map((r,i)=>`<tr>
+  const list=myWorkers();
+  document.getElementById('reportBody').innerHTML = list.length ? list.map(r=>`<tr>
       <td style="text-align:right">${r.name}</td><td>${r.serial}</td>
       <td>${badge(r.day)}</td><td>${badge(r.week)}</td><td>${badge(r.month)}</td>
       <td>${tempCell(r.temperature,th)}</td>
       <td>${statusCell(r.status)}</td>
-      <td><button class="btn del-worker" data-i="${i}" title="حذف العامل" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
-    : `<tr><td colspan="8" style="color:var(--dim);padding:22px">لا يوجد عمال بعد — أضف عاملاً جديداً بزر «إضافة عامل».</td></tr>`;
+      <td><button class="btn rep-worker" data-s="${r.serial}" title="عرض التقرير" style="padding:6px 10px">📄</button></td>
+      <td><button class="btn del-worker" data-s="${r.serial}" title="حذف العامل" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
+    : `<tr><td colspan="9" style="color:var(--dim);padding:22px">لا يوجد عمال بعد — أضف عاملاً جديداً بزر «إضافة عامل».</td></tr>`;
   /* تحذير الحرارة: العمال المتجاوزون للحد */
-  const over=db.workers.filter(w=>w.temperature!=null && Number(w.temperature)>=th);
+  const over=list.filter(w=>w.temperature!=null && Number(w.temperature)>=th);
   const tw=document.getElementById('tempWarn');
   if(tw) tw.innerHTML = over.length ? `<div class="temp-warn">⚠️ <b>تحذير حرارة:</b> تجاوز الحد (${th}°C): `+over.map(w=>`${w.name} — <b>${fmtTemp(w.temperature)}</b>`).join('، ')+`</div>` : '';
   const ti=document.getElementById('threshInput'); if(ti && document.activeElement!==ti) ti.value=th;
+  const ci=document.getElementById('cityInput'); if(ci && document.activeElement!==ci) ci.value=(db.city!=null?db.city:40);
   /* تنبيه صوتي لمرة واحدة عند تجاوز عامل الحد */
   over.forEach(w=>{ if(!_tempAlerted.has(w.serial)){ _tempAlerted.add(w.serial); const ss=TS.session(); if(ss&&ss.role==='specialist') toast('🌡️ تحذير: حرارة العامل <b>'+w.name+'</b> بلغت '+fmtTemp(w.temperature)+' (الحد '+th+'°C)',true); } });
   _tempAlerted.forEach(sr=>{ if(!over.some(w=>w.serial===sr)) _tempAlerted.delete(sr); });
-  const highRows=db.workers.filter(r=>r.week==='high'||r.week==='danger').sort((a,b)=>(b.week==='danger')-(a.week==='danger'));
-  document.getElementById('hedBody').innerHTML = highRows.length ? highRows.map(r=>`<tr><td>${r.serial}</td><td style="text-align:right">${r.name}</td><td>${badge(r.week==='danger'?'danger':'high')}</td></tr>`).join('')
-    : `<tr><td colspan="3" style="color:var(--dim)">لا يوجد</td></tr>`;
+  const highRows=list.filter(r=>r.week==='high'||r.week==='danger').sort((a,b)=>(b.week==='danger')-(a.week==='danger'));
+  document.getElementById('hedBody').innerHTML = highRows.length ? highRows.map(r=>`<tr><td>${r.serial}</td><td style="text-align:right">${r.name}</td><td>${tempCell(r.temperature,th)}</td><td>${badge(r.week==='danger'?'danger':'high')}</td></tr>`).join('')
+    : `<tr><td colspan="4" style="color:var(--dim)">لا يوجد</td></tr>`;
   document.getElementById('hedCount').textContent=highRows.length;
   if(db.sos){
     document.getElementById('sosTitle').textContent=`تنبيه: العامل ${db.sos.name} (${db.sos.serial}) استخدم زر SOS`;
@@ -959,9 +1007,10 @@ function openAddWorker(){
     const serial=back.querySelector('#awSerial').value.trim()||('TH-'+Math.floor(10000+Math.random()*89999));
     if(db.workers.some(w=>w.serial===serial)){ msg.className='hint-msg err'; msg.textContent='الرقم التسلسلي مستخدم مسبقاً.'; return; }
     const lvl=back.querySelector('#awLevel').value, makeAcc=back.querySelector('#awAccount').checked;
+    const owner=(TS.session()||{}).user||null;
     btn.disabled=true; msg.className='hint-msg'; msg.textContent='… جارٍ الحفظ';
     try{
-      await DB.addWorker(name,serial,lvl,makeAcc);
+      await DB.addWorker(name,serial,lvl,makeAcc,owner);
       renderSpecialist();
       back.classList.remove('open');
       toast(`تمت إضافة العامل ${name} ✓`);
@@ -978,9 +1027,17 @@ function initSpecialist(){
     if(isNaN(v)||v<20||v>60){ toast('أدخل قيمة بين 20 و 60 درجة.',true); return; }
     DB.setThreshold(v).then(()=>{ renderSpecialist(); toast('تم تحديث حد الحرارة إلى '+v+'°C ✓'); }).catch(()=>toast('تعذّر حفظ الحد في قاعدة البيانات.',true));
   });
+  document.getElementById('cityInput').value=(db.city!=null?db.city:40);
+  document.getElementById('citySave').addEventListener('click',()=>{
+    const v=parseFloat(document.getElementById('cityInput').value);
+    if(isNaN(v)||v<0||v>60){ toast('أدخل قيمة بين 0 و 60 درجة.',true); return; }
+    DB.setCity(v).then(()=>{ renderSpecialist(); toast('تم تحديث حرارة المدينة إلى '+v+'°C ✓'); }).catch(()=>toast('تعذّر حفظ حرارة المدينة.',true));
+  });
   document.getElementById('reportBody').addEventListener('click',e=>{
-    const btn=e.target.closest('.del-worker'); if(!btn) return;
-    const i=+btn.dataset.i, w=db.workers[i]; if(!w) return;
+    const rep=e.target.closest('.rep-worker');
+    if(rep){ const w=db.workers.find(x=>x.serial===rep.dataset.s); if(w) openWorkerReport(w); return; }
+    const del=e.target.closest('.del-worker'); if(!del) return;
+    const w=db.workers.find(x=>x.serial===del.dataset.s); if(!w) return;
     if(confirm(`حذف العامل «${w.name}» (${w.serial})؟`)){
       DB.deleteWorker(w.serial)
         .then(()=>{ renderSpecialist(); toast('تم حذف العامل.'); })
@@ -988,8 +1045,8 @@ function initSpecialist(){
     }
   });
   document.getElementById('sosLoc').addEventListener('click',()=>toast('🗺️ عرض موقع العامل على الخريطة: '+document.getElementById('sosPlace').textContent));
-  document.getElementById('showAllHigh').addEventListener('click',()=>{ const n=db.workers.filter(r=>r.week==='high'||r.week==='danger').length; toast('عدد العمال ذوي التعرّض المرتفع/الخطر: '+n+'.'); });
-  document.getElementById('aiBtn').addEventListener('click',()=>openAI(AI.specialistInsights(db.workers),'تحليل ذكي لجميع عمال الموقع'));
+  document.getElementById('showAllHigh').addEventListener('click',()=>{ const n=myWorkers().filter(r=>r.week==='high'||r.week==='danger').length; toast('عدد العمال ذوي التعرّض المرتفع/الخطر: '+n+'.'); });
+  document.getElementById('aiBtn').addEventListener('click',()=>openAI(AI.specialistInsights(myWorkers()),'تحليل ذكي لعمالك في الموقع'));
 }
 
 /* ---------------- boot ---------------- */
