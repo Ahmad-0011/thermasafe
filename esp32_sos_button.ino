@@ -1,110 +1,81 @@
 /* ============================================================
-   ThermaSafe — زر الطوارئ (SOS) على ESP32
+   ThermaSafe - ESP32 emergency SOS button (button only)
    ------------------------------------------------------------
-   عند الضغط على الزر، يرسل ESP32 طلباً مباشرة إلى قاعدة بيانات
-   Supabase (جدول sos_alerts)، فيظهر التنبيه فوراً في تطبيق
-   مختص السلامة عبر المزامنة اللحظية (Realtime).
-
-   لوحة: ESP32 (Dev Module)
-   المكتبات: مدمجة مع حزمة ESP32 (WiFi, WiFiClientSecure, HTTPClient)
-
-   ⚠️ ملاحظة: هذا كود ESP32. لـ ESP8266 انظر التعليقات في الأسفل.
+   Sends an SOS alert to Supabase when the button is pressed.
+   All text is ASCII (Arabic inside code can break when copied).
+   For temperature too, use esp32_sos_dht11.ino instead.
    ============================================================ */
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
-// ------------------ 1) إعدادات الشبكة (عدّلها) ------------------
-const char* WIFI_SSID = "اسم_شبكة_الواي_فاي";
-const char* WIFI_PASS = "كلمة_مرور_الواي_فاي";
+// ---- 1) WiFi (edit) ----
+const char* WIFI_SSID = "YOUR_WIFI_NAME";
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
 
-// ------------------ 2) إعدادات Supabase (جاهزة) ------------------
+// ---- 2) Supabase (ready) ----
 const char* SUPABASE_URL = "https://uwpycowwylwjwezzxdfk.supabase.co";
-const char* SUPABASE_KEY = "sb_publishable_bTFs7B21uBVzGo7SrhGfMQ_QfZydCA0"; // مفتاح publishable آمن
+const char* SUPABASE_KEY = "sb_publishable_bTFs7B21uBVzGo7SrhGfMQ_QfZydCA0";
 
-// ------------------ 3) هوية العامل/الخوذة (عدّلها) ------------------
+// ---- 3) Worker identity ----
 const char* WORKER_SERIAL = "TH-20481";
-const char* WORKER_NAME   = "محمد أحمد العتيبي";
-const char* WORKER_LOC    = "وحدة الإنتاج 3";
+const char* WORKER_NAME   = "Worker";              // app shows real Arabic name by serial
+const char* WORKER_LOC    = "Production Unit 3";
 
-// ------------------ 4) الأطراف (Pins) ------------------
-const int BUTTON_PIN = 4;    // زر بين GPIO4 و GND (يستخدم المقاومة الداخلية)
-const int LED_PIN    = 2;    // LED مدمج للتأكيد البصري (اختياري)
+// ---- 4) Pins ----
+const int BUTTON_PIN = 4;    // button between GPIO4 and GND
+const int LED_PIN    = 2;    // onboard LED (optional)
 
-bool lastState = HIGH;
+bool lastBtn = HIGH;
 unsigned long lastSend = 0;
 
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("الاتصال بالشبكة");
+  Serial.print("Connecting to WiFi");
   unsigned long t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) {
-    delay(400); Serial.print(".");
-  }
-  if (WiFi.status() == WL_CONNECTED)
-    Serial.println("\n✅ متصل. IP: " + WiFi.localIP().toString());
-  else
-    Serial.println("\n❌ فشل الاتصال بالشبكة.");
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) { delay(400); Serial.print("."); }
+  if (WiFi.status() == WL_CONNECTED) Serial.println("\nConnected. IP: " + WiFi.localIP().toString());
+  else Serial.println("\nWiFi connection failed.");
 }
 
 void sendSOS() {
   if (WiFi.status() != WL_CONNECTED) { connectWiFi(); }
   if (WiFi.status() != WL_CONNECTED) return;
-
-  WiFiClientSecure client;
-  client.setInsecure();                  // تخطّي التحقق من الشهادة (كافٍ للتجربة)
-
+  WiFiClientSecure client; client.setInsecure();
   HTTPClient https;
-  String url = String(SUPABASE_URL) + "/rest/v1/sos_alerts";
-  if (!https.begin(client, url)) { Serial.println("تعذّر بدء الطلب."); return; }
-
+  https.begin(client, String(SUPABASE_URL) + "/rest/v1/sos_alerts");
   https.addHeader("Content-Type", "application/json");
   https.addHeader("apikey", SUPABASE_KEY);
   https.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
   https.addHeader("Prefer", "return=minimal");
-
-  String body = String("{\"serial\":\"") + WORKER_SERIAL +
+  String body = "{\"serial\":\"" + String(WORKER_SERIAL) +
                 "\",\"name\":\"" + WORKER_NAME +
                 "\",\"location\":\"" + WORKER_LOC + "\"}";
-
   int code = https.POST(body);
-  Serial.printf("📡 إرسال SOS — كود الاستجابة: %d\n", code);
-  if (code == 201 || code == 200 || code == 204) Serial.println("✅ وصل التنبيه للتطبيق.");
-  else Serial.println("⚠️ استجابة غير متوقعة: " + https.getString());
+  Serial.printf("SOS sent -> HTTP %d %s\n", code, (code==201||code==204)?"OK":"CHECK");
   https.end();
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(300);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);     // الزر مضغوط = LOW
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  Serial.begin(115200); delay(300);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT); digitalWrite(LED_PIN, LOW);
   connectWiFi();
-  Serial.println("جاهز. اضغط زر الطوارئ لإرسال SOS.");
+  Serial.println("Ready. Press the button to send SOS.");
 }
 
 void loop() {
-  bool s = digitalRead(BUTTON_PIN);
-  // اكتشاف ضغطة (حافة هابطة) + مانع تكرار 3 ثوانٍ
-  if (lastState == HIGH && s == LOW && millis() - lastSend > 3000) {
+  bool b = digitalRead(BUTTON_PIN);
+  if (lastBtn == HIGH && b == LOW && millis() - lastSend > 3000) {
     lastSend = millis();
-    Serial.println("🔴 تم الضغط على زر الطوارئ!");
+    Serial.println("Emergency button pressed!");
     digitalWrite(LED_PIN, HIGH);
     sendSOS();
     delay(400);
     digitalWrite(LED_PIN, LOW);
   }
-  lastState = s;
-  delay(20);   // debounce بسيط
+  lastBtn = b;
+  delay(20);
 }
-
-/* ============================================================
-   لـ ESP8266 (بدل ESP32) استبدل الترويسات الثلاث الأولى بـ:
-     #include <ESP8266WiFi.h>
-     #include <WiFiClientSecure.h>
-     #include <ESP8266HTTPClient.h>
-   وبقية الكود يعمل كما هو (BUTTON_PIN مثلاً D2 = GPIO4، LED_PIN = LED_BUILTIN).
-   ============================================================ */

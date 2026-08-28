@@ -1,13 +1,16 @@
 /* ============================================================
-   ThermaSafe — ESP32 + حساس حرارة DHT11 + زر طوارئ SOS
+   ThermaSafe - ESP32 + DHT11 temperature sensor + SOS button
    ------------------------------------------------------------
-   • يقرأ الحرارة/الرطوبة من DHT11 ويرسلها دورياً لقاعدة البيانات
-     (تظهر في صفحة العامل جنب اسمه، وفي جدول المختص مع تحذير عند تجاوز الحد).
-   • زر الطوارئ يرسل نداء SOS فوري.
+   Sends worker temperature/humidity to Supabase every few seconds,
+   and an instant SOS alert when the button is pressed.
 
-   المكتبات المطلوبة (Arduino IDE → Library Manager، ابحث وثبّت):
+   Required libraries (Arduino IDE -> Library Manager):
      - "DHT sensor library" (Adafruit)
      - "Adafruit Unified Sensor"
+
+   NOTE: all text here is ASCII on purpose (Arabic inside code can
+   break when copied from chat). Worker names show in Arabic from
+   the app database, not from here.
    ============================================================ */
 
 #include <WiFi.h>
@@ -15,23 +18,23 @@
 #include <HTTPClient.h>
 #include "DHT.h"
 
-// ------------------ 1) إعدادات الشبكة (عدّلها) ------------------
-const char* WIFI_SSID = "اسم_شبكة_الواي_فاي";
-const char* WIFI_PASS = "كلمة_مرور_الواي_فاي";
+// ---- 1) WiFi (edit these) ----
+const char* WIFI_SSID = "YOUR_WIFI_NAME";
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
 
-// ------------------ 2) إعدادات Supabase (جاهزة) ------------------
+// ---- 2) Supabase (ready) ----
 const char* SUPABASE_URL = "https://uwpycowwylwjwezzxdfk.supabase.co";
 const char* SUPABASE_KEY = "sb_publishable_bTFs7B21uBVzGo7SrhGfMQ_QfZydCA0";
 
-// ------------------ 3) هوية العامل/الخوذة (عدّلها) ------------------
-const char* WORKER_SERIAL = "TH-20481";           // رقم عامل موجود في قاعدة البيانات
-const char* WORKER_NAME   = "محمد أحمد العتيبي";
-const char* WORKER_LOC    = "وحدة الإنتاج 3";
+// ---- 3) Worker identity (edit serial to match a worker in the app) ----
+const char* WORKER_SERIAL = "TH-20481";
+const char* WORKER_NAME   = "Worker";              // app shows the real Arabic name by serial
+const char* WORKER_LOC    = "Production Unit 3";
 
-// ------------------ 4) الأطراف (Pins) ------------------
-const int BUTTON_PIN = 4;    // زر الطوارئ بين GPIO4 و GND
-const int LED_PIN    = 2;    // LED مدمج (اختياري)
-const int DHT_PIN    = 15;   // طرف بيانات DHT11 على GPIO15
+// ---- 4) Pins ----
+const int BUTTON_PIN = 4;    // button between GPIO4 and GND
+const int LED_PIN    = 2;    // onboard LED (optional)
+const int DHT_PIN    = 15;   // DHT11 DATA on GPIO15
 #define   DHT_TYPE   DHT11
 
 DHT dht(DHT_PIN, DHT_TYPE);
@@ -39,19 +42,18 @@ DHT dht(DHT_PIN, DHT_TYPE);
 bool lastBtn = HIGH;
 unsigned long lastSend = 0;
 unsigned long lastTemp = 0;
-const unsigned long TEMP_EVERY = 4000;    // إرسال الحرارة كل 4 ثوانٍ (أسرع)
+const unsigned long TEMP_EVERY = 4000;   // send temperature every 4 seconds
 
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("الاتصال بالشبكة");
+  Serial.print("Connecting to WiFi");
   unsigned long t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) { delay(400); Serial.print("."); }
-  if (WiFi.status() == WL_CONNECTED) Serial.println("\n✅ متصل. IP: " + WiFi.localIP().toString());
-  else Serial.println("\n❌ فشل الاتصال بالشبكة.");
+  if (WiFi.status() == WL_CONNECTED) Serial.println("\nConnected. IP: " + WiFi.localIP().toString());
+  else Serial.println("\nWiFi connection failed.");
 }
 
-// إرسال طلب POST إلى Supabase (REST أو RPC)
 int postJSON(String path, String body) {
   if (WiFi.status() != WL_CONNECTED) { connectWiFi(); }
   if (WiFi.status() != WL_CONNECTED) return -1;
@@ -63,30 +65,28 @@ int postJSON(String path, String body) {
   https.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
   https.addHeader("Prefer", "return=minimal");
   int code = https.POST(body);
-  if (code <= 0) Serial.println("خطأ اتصال: " + https.errorToString(code));
+  if (code <= 0) Serial.println("Connection error: " + https.errorToString(code));
   https.end();
   return code;
 }
 
-// إرسال الحرارة والرطوبة (دالة ts_update_temp)
 void sendTemperature() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-  if (isnan(t) || isnan(h)) { Serial.println("⚠️ تعذّرت قراءة DHT11 (تحقق من التوصيل)."); return; }
+  if (isnan(t) || isnan(h)) { Serial.println("DHT11 read failed (check wiring)."); return; }
   String body = "{\"p_serial\":\"" + String(WORKER_SERIAL) +
                 "\",\"p_temp\":" + String(t, 1) +
                 ",\"p_hum\":" + String(h, 0) + "}";
   int code = postJSON("/rest/v1/rpc/ts_update_temp", body);
-  Serial.printf("🌡️ حرارة %.1f°C ورطوبة %.0f%% — استجابة: %d\n", t, h, code);
+  Serial.printf("Temp %.1fC  Hum %.0f%%  -> HTTP %d\n", t, h, code);
 }
 
-// إرسال نداء الطوارئ (جدول sos_alerts)
 void sendSOS() {
   String body = "{\"serial\":\"" + String(WORKER_SERIAL) +
                 "\",\"name\":\"" + WORKER_NAME +
                 "\",\"location\":\"" + WORKER_LOC + "\"}";
   int code = postJSON("/rest/v1/sos_alerts", body);
-  Serial.printf("📡 إرسال SOS — استجابة: %d %s\n", code, (code==201||code==204)?"✅":"⚠️");
+  Serial.printf("SOS sent -> HTTP %d %s\n", code, (code==201||code==204)?"OK":"CHECK");
 }
 
 void setup() {
@@ -95,18 +95,16 @@ void setup() {
   pinMode(LED_PIN, OUTPUT); digitalWrite(LED_PIN, LOW);
   dht.begin();
   connectWiFi();
-  Serial.println("جاهز. الحرارة تُرسل تلقائياً، والزر يرسل SOS.");
+  Serial.println("Ready. Temperature auto-sends, button sends SOS.");
 }
 
 void loop() {
-  // 1) إرسال الحرارة دورياً
   if (millis() - lastTemp > TEMP_EVERY) { lastTemp = millis(); sendTemperature(); }
 
-  // 2) زر الطوارئ (ضغطة + مانع تكرار 3 ثوانٍ)
   bool b = digitalRead(BUTTON_PIN);
   if (lastBtn == HIGH && b == LOW && millis() - lastSend > 3000) {
     lastSend = millis();
-    Serial.println("🔴 تم الضغط على زر الطوارئ!");
+    Serial.println("Emergency button pressed!");
     digitalWrite(LED_PIN, HIGH);
     sendSOS();
     delay(400);
@@ -117,13 +115,8 @@ void loop() {
 }
 
 /* ============================================================
-   توصيل DHT11 (3 أرجل عادةً، أو 4):
-     VCC  → 3V3 في ESP32
-     DATA → GPIO15
-     GND  → GND
-   (بعض وحدات DHT11 فيها مقاومة مدمجة؛ إن لم تكن، ضع مقاومة 10kΩ
-    بين DATA و VCC.)
-
-   لـ ESP8266: بدّل أول 3 ترويسات إلى ESP8266WiFi.h / WiFiClientSecure.h /
-   ESP8266HTTPClient.h، وغيّر DHT_PIN إلى منفذ مناسب (مثل D4).
+   DHT11 wiring:  VCC -> 3V3 , DATA -> GPIO15 , GND -> GND
+   Button wiring: one leg -> GPIO4 , other leg -> GND
+   For ESP8266: swap the first 3 headers to ESP8266WiFi.h /
+   WiFiClientSecure.h / ESP8266HTTPClient.h, and set DHT_PIN (e.g. D4).
    ============================================================ */

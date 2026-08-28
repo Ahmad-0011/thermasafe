@@ -514,7 +514,8 @@ const DB={
     db.workers=(w.data||[]).map(r=>({name:r.name,serial:r.serial,owner:r.owner,day:r.day,week:r.week,month:r.month,status:r.status,temperature:r.temperature,humidity:r.humidity,temp_at:r.temp_at,dose_week:r.dose_week,dose_month:r.dose_month}));
     if(!s.error && s.data && s.data[0]){
       const a=s.data[0];
-      db.sos={serial:a.serial,name:a.name,loc:a.location,time:new Date(a.created_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})};
+      const wk=db.workers.find(w=>w.serial===a.serial);
+      db.sos={serial:a.serial,name:(wk?wk.name:a.name),loc:a.location,time:new Date(a.created_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})};
     }
     if(st && !st.error && st.data && st.data[0]){
       if(st.data[0].temp_threshold!=null) db.threshold=Number(st.data[0].temp_threshold);
@@ -636,8 +637,13 @@ function startSiren(){
 }
 function stopSiren(){ if(_sosSiren){ clearInterval(_sosSiren); _sosSiren=null; } }
 
+function sosWorkerName(row){
+  if(!row) return 'عامل';
+  const wk=db.workers.find(w=>w.serial===row.serial);
+  return wk?wk.name:(row.name||row.serial||'عامل');
+}
 function onSosAlert(row){
-  const who=row?(row.name||row.serial||'عامل'):'عامل';
+  const who=sosWorkerName(row);
   const loc=row&&row.location?(' — '+row.location):'';
   toast('🆘 نداء استغاثة جديد من: <b>'+who+'</b>'+loc+' — تحقّق فوراً!',true);
   const s=TS.session();
@@ -662,7 +668,7 @@ function showSosOverlay(row){
       if(TS.session()&&TS.session().role==='specialist') go('specialist');
     });
   }
-  const who=row?(row.name||row.serial||'عامل غير معروف'):'عامل';
+  const who=sosWorkerName(row);
   const serial=row&&row.serial?row.serial:'';
   const loc=row&&row.location?row.location:'—';
   const time=new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'});
