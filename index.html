@@ -317,6 +317,19 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
       </div>
     </div>
 
+    <div class="card" id="batteryCard" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:30px">🔋</span>
+          <div><div style="font-weight:800;font-size:20px" id="battVal">—</div><div style="color:var(--muted);font-size:13px">شحن جهاز المستشعر (ESP)</div></div>
+        </div>
+        <div style="flex:1;min-width:160px;height:14px;border-radius:8px;background:rgba(255,255,255,.08);overflow:hidden">
+          <div id="battFill" style="height:100%;width:0;background:var(--safe);transition:.35s"></div>
+        </div>
+      </div>
+      <div id="battWarn" class="temp-warn" style="display:none;margin-top:12px">⚠️ بطارية الجهاز منخفضة (أقل من 20%)! يُرجى شحن الجهاز.</div>
+    </div>
+
     <div class="card">
       <h3 class="card-title">مدة التعرّض</h3>
       <div class="tabs">
@@ -348,7 +361,15 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
             <div class="lg-row"><span class="name"><span class="dot dot-danger"></span>أكثر من 30 ساعة</span><b>خطر</b></div>
           </div>
         </div>
-        <button class="btn btn-orange btn-block" id="startWork" style="margin-top:18px">▶ ابدأ العمل</button>
+        <div class="field" style="margin:16px 0 4px">
+          <label>المحطة / موقعك الحالي (اختره قبل بدء العمل)</label>
+          <div class="input-wrap"><span class="ic">📍</span>
+            <select id="stationSelect" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);padding:14px 0;font-size:15px;font-family:inherit">
+              <option value="">— اختر محطتك —</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-orange btn-block" id="startWork" style="margin-top:14px">▶ ابدأ العمل</button>
       </div>
     </div>
 
@@ -426,6 +447,15 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
     </div>
 
     <div class="card">
+      <h3 class="card-title left" style="color:var(--teal-soft)">📍 المحطات / المواقع</h3>
+      <button class="btn btn-orange" id="addStationBtn" style="padding:10px 16px;margin-bottom:12px">➕ إضافة محطة</button>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>المحطة</th><th>الإحداثيات</th><th>خريطة</th><th>حذف</th></tr></thead>
+        <tbody id="stationBody"></tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
       <h3 class="card-title" style="color:#ff8f8f">SOS</h3>
       <div class="sos-card">
         <button class="btn-loc" id="sosLoc">📍 عرض الموقع</button>
@@ -470,9 +500,13 @@ function seedDB(){ return {
     {user:'specialist',pass:'1234',role:'specialist',name:'م. خالد الدوسري',serial:'SF-1001'}
   ],
   workers:[
-    {name:'محمد أحمد العتيبي',serial:'TH-20481',owner:'specialist',day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'سالم ناصر القحطاني',serial:'TH-19872',owner:'specialist',day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'أحمد علي الشهري',serial:'TH-17635',owner:'specialist',day:'safe',week:'safe',month:'safe',status:'safe'}
+    {name:'محمد أحمد العتيبي',serial:'TH-20481',owner:'specialist',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'سالم ناصر القحطاني',serial:'TH-19872',owner:'specialist',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'أحمد علي الشهري',serial:'TH-17635',owner:'specialist',station:null,day:'safe',week:'safe',month:'safe',status:'safe'}
+  ],
+  stations:[
+    {id:1,name:'محطة ترطيب A',owner:'specialist',lat:24.7136,lng:46.6753},
+    {id:2,name:'محطة ترطيب B',owner:'specialist',lat:24.7200,lng:46.6800}
   ],
   sos:null,
   threshold:38,
@@ -505,17 +539,19 @@ const DB={
     reflectDbStatus(); rerender();
   },
   async refresh(){
-    const [w,s,st]=await Promise.all([
+    const [w,s,st,stn]=await Promise.all([
       this.sb.from('workers').select('*').order('id'),
       this.sb.from('sos_alerts').select('*').order('id',{ascending:false}).limit(1),
-      this.sb.from('settings').select('temp_threshold,city_temp').eq('id',1).limit(1)
+      this.sb.from('settings').select('temp_threshold,city_temp').eq('id',1).limit(1),
+      this.sb.from('stations').select('*').order('id')
     ]);
     if(w.error) throw w.error;
-    db.workers=(w.data||[]).map(r=>({name:r.name,serial:r.serial,owner:r.owner,day:r.day,week:r.week,month:r.month,status:r.status,temperature:r.temperature,humidity:r.humidity,temp_at:r.temp_at,dose_week:r.dose_week,dose_month:r.dose_month}));
+    db.workers=(w.data||[]).map(r=>({name:r.name,serial:r.serial,owner:r.owner,station:r.station,day:r.day,week:r.week,month:r.month,status:r.status,temperature:r.temperature,humidity:r.humidity,battery:r.battery,temp_at:r.temp_at,dose_week:r.dose_week,dose_month:r.dose_month}));
+    if(stn && !stn.error) db.stations=(stn.data||[]).map(r=>({id:r.id,name:r.name,owner:r.owner,lat:r.lat,lng:r.lng}));
     if(!s.error && s.data && s.data[0]){
       const a=s.data[0];
       const wk=db.workers.find(w=>w.serial===a.serial);
-      db.sos={serial:a.serial,name:(wk?wk.name:a.name),loc:a.location,time:new Date(a.created_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})};
+      db.sos={serial:a.serial,name:(wk?wk.name:a.name),loc:a.location,lat:a.lat,lng:a.lng,time:new Date(a.created_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'})};
     }
     if(st && !st.error && st.data && st.data[0]){
       if(st.data[0].temp_threshold!=null) db.threshold=Number(st.data[0].temp_threshold);
@@ -548,6 +584,24 @@ const DB={
       const {error}=await this.sb.rpc('ts_set_city',{p_val:val});
       if(error) throw error; db.city=val;
     }else{ db.city=val; store.set('ts_db',db); }
+  },
+  async setStation(serial,station){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_set_station',{p_serial:serial,p_station:station});
+      if(error) throw error; await this.refresh();
+    }else{ const w=db.workers.find(x=>x.serial===serial); if(w) w.station=station; store.set('ts_db',db); }
+  },
+  async addStation(name,lat,lng,owner){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_add_station',{p_name:name,p_lat:(lat==null?null:lat),p_lng:(lng==null?null:lng),p_owner:owner||null});
+      if(error) throw error; await this.refresh();
+    }else{ db.stations=db.stations||[]; db.stations.push({id:Date.now(),name,owner,lat,lng}); store.set('ts_db',db); }
+  },
+  async deleteStation(id){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_delete_station',{p_id:id});
+      if(error) throw error; await this.refresh();
+    }else{ db.stations=(db.stations||[]).filter(s=>s.id!==id); store.set('ts_db',db); }
   },
   async login(u,p){
     if(this.mode==='supabase'){
@@ -660,20 +714,27 @@ function showSosOverlay(row){
         <div class="sos-ov-sub">SOS EMERGENCY</div>
         <div class="sos-ov-who"></div>
         <div class="sos-ov-meta"></div>
-        <button class="sos-ov-btn">تم الاطّلاع — عرض التفاصيل</button>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+          <button class="sos-ov-btn sos-ov-map" style="display:none">📍 فتح الموقع في الخريطة</button>
+          <button class="sos-ov-btn sos-ov-ack">تم الاطّلاع — عرض التفاصيل</button>
+        </div>
       </div>`;
     document.body.appendChild(ov);
-    ov.querySelector('.sos-ov-btn').addEventListener('click',()=>{
+    ov.querySelector('.sos-ov-ack').addEventListener('click',()=>{
       ov.classList.remove('show'); stopSiren();
       if(TS.session()&&TS.session().role==='specialist') go('specialist');
     });
   }
   const who=sosWorkerName(row);
   const serial=row&&row.serial?row.serial:'';
-  const loc=row&&row.location?row.location:'—';
   const time=new Date().toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'});
+  const coords=sosStationCoords({serial:serial,loc:(row&&row.location),lat:(row&&row.lat),lng:(row&&row.lng)});
+  const locName=coords?(coords.name||'موقع محدد'):((row&&row.location)||'—');
   ov.querySelector('.sos-ov-who').innerHTML='العامل: <b>'+who+'</b>'+(serial?(' — '+serial):'');
-  ov.querySelector('.sos-ov-meta').innerHTML='📍 '+loc+' &nbsp;·&nbsp; 🕐 '+time;
+  ov.querySelector('.sos-ov-meta').innerHTML='📍 '+locName+' &nbsp;·&nbsp; 🕐 '+time;
+  const mapBtn=ov.querySelector('.sos-ov-map');
+  if(coords && coords.lat!=null){ mapBtn.style.display='inline-block'; mapBtn.onclick=()=>openMap(coords.lat,coords.lng); }
+  else mapBtn.style.display='none';
   ov.classList.add('show');
   startSiren();
 }
@@ -861,10 +922,17 @@ function initWorker(){
   document.getElementById('sIndex').textContent='متوسط';
   document.getElementById('startWork').textContent='▶ ابدأ العمل';
   applyRange('week');
+  populateStations();
   updateWorkerTemp();   /* يستبدل القيم التجريبية ببيانات الحساس الحقيقية إن وُجدت */
   if(_workerBound) return; _workerBound=true;
   document.querySelectorAll('#v-worker .tab').forEach(t=>t.addEventListener('click',()=>applyRange(t.dataset.range)));
+  document.getElementById('stationSelect').addEventListener('change',e=>{
+    const v=e.target.value; const s2=TS.session(); if(!s2) return;
+    DB.setStation(s2.serial,v).then(()=>toast(v?('تم تحديد محطتك: '+v):'تم مسح المحطة')).catch(()=>toast('تعذّر حفظ المحطة.',true));
+  });
   document.getElementById('startWork').addEventListener('click',()=>{
+    const sel=document.getElementById('stationSelect');
+    if(!worker.working && sel && !sel.value){ toast('⚠️ اختر محطتك / موقعك أولاً قبل بدء العمل.',true); sel.focus(); return; }
     worker.working=!worker.working; const b=document.getElementById('startWork');
     if(worker.working){
       b.textContent='⏸ إيقاف العمل'; toast('بدأ تسجيل التعرّض الحراري. النظام يراقب حالتك الآن.');
@@ -902,12 +970,34 @@ function initWorker(){
 }
 
 /* حرارة العامل (من DHT11 عبر ESP) — تظهر جنب اسمه، والحالة تتغير حسبها */
+let _battWarned=false;
 function fmtTemp(t){ return t==null?'—':(Math.round(Number(t)*10)/10)+'°C'; }
 function statusColor(st){ return st==='danger'?'var(--danger)':st==='high'?'var(--orange)':st==='mid'?'var(--mid)':'var(--safe)'; }
+function populateStations(){
+  const sel=document.getElementById('stationSelect'); if(!sel) return;
+  if(document.activeElement===sel) return;
+  const s=TS.session(); if(!s) return;
+  const me=db.workers.find(w=>w.serial===s.serial);
+  const owner=me?me.owner:null, cur=me?me.station:'';
+  const list=(db.stations||[]).filter(st=>!owner||st.owner===owner);
+  sel.innerHTML='<option value="">— اختر محطتك —</option>'+list.map(st=>`<option value="${st.name}"${st.name===cur?' selected':''}>${st.name}</option>`).join('');
+}
 function updateWorkerTemp(){
   const s=TS.session(); const badge=document.getElementById('wTempBadge'); if(!s||!badge) return;
   const row=db.workers.find(w=>w.serial===s.serial);
   const th=db.threshold||38;
+  /* بطارية الجهاز + تنبيه أقل من 20% */
+  const bc=document.getElementById('batteryCard');
+  if(row && row.battery!=null){
+    const b=Math.max(0,Math.min(100,Math.round(Number(row.battery))));
+    if(bc) bc.style.display='block';
+    const bv=document.getElementById('battVal'); if(bv) bv.textContent=b+'%';
+    const bf=document.getElementById('battFill'); if(bf){ bf.style.width=b+'%'; bf.style.background=(b<20?'var(--danger)':b<50?'var(--mid)':'var(--safe)'); }
+    const bw=document.getElementById('battWarn'); if(bw) bw.style.display=(b<20?'block':'none');
+    if(b<20 && !_battWarned){ _battWarned=true; toast('🔋 بطارية جهازك منخفضة ('+b+'%) — يُرجى الشحن.',true); }
+    if(b>=25) _battWarned=false;
+  }else if(bc){ bc.style.display='none'; }
+  populateStations();
   if(row && row.temperature!=null){
     const t=Number(row.temperature), hot=t>=th;
     badge.style.display='inline-flex';
@@ -934,6 +1024,7 @@ function openWorkerReport(w){
               'الوضع آمن — متابعة اعتيادية';
   const rows=[
     ['اسم العامل',w.name],['الرقم التسلسلي',w.serial],
+    ['المحطة / الموقع', w.station||'—'],
     ['الحرارة الحالية', fmtTemp(w.temperature)],
     ['آخر تحديث', w.temp_at?new Date(w.temp_at).toLocaleString('ar'):'—'],
     ['الحالة الآن', LABELS[w.status]||'—'],
@@ -986,9 +1077,66 @@ function renderSpecialist(){
   document.getElementById('hedCount').textContent=highRows.length;
   if(db.sos){
     document.getElementById('sosTitle').textContent=`تنبيه: العامل ${db.sos.name} (${db.sos.serial}) استخدم زر SOS`;
-    document.getElementById('sosTime').textContent=db.sos.time; document.getElementById('sosPlace').textContent=db.sos.loc;
+    document.getElementById('sosTime').textContent=db.sos.time; document.getElementById('sosPlace').textContent=sosLocationText(db.sos);
   }
+  /* المحطات الخاصة بهذا المختص */
+  const sList=myStations();
+  const sb=document.getElementById('stationBody');
+  if(sb) sb.innerHTML = sList.length ? sList.map(st=>`<tr>
+      <td style="text-align:right">${st.name}</td>
+      <td>${(st.lat!=null&&st.lng!=null)?(Number(st.lat).toFixed(4)+', '+Number(st.lng).toFixed(4)):'<span style="color:var(--dim)">—</span>'}</td>
+      <td>${(st.lat!=null&&st.lng!=null)?`<button class="btn map-station" data-lat="${st.lat}" data-lng="${st.lng}" style="padding:6px 10px">🗺️</button>`:'—'}</td>
+      <td><button class="btn del-station" data-id="${st.id}" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
+    : `<tr><td colspan="4" style="color:var(--dim);padding:16px">لا توجد محطات — أضف محطة ليختارها العمال.</td></tr>`;
   reflectDbStatus();
+}
+function myStations(){
+  const s=TS.session();
+  return (db.stations||[]).filter(st=>!s||st.owner===s.user);
+}
+function openMap(lat,lng){ if(lat==null||lng==null) return false; window.open('https://www.google.com/maps?q='+lat+','+lng,'_blank'); return true; }
+/* نص/إحداثيات موقع نداء SOS: من محطة العامل الحالية */
+function sosStationCoords(sos){
+  if(!sos) return null;
+  if(sos.lat!=null&&sos.lng!=null) return {lat:sos.lat,lng:sos.lng,name:sos.loc};
+  const w=db.workers.find(x=>x.serial===sos.serial);
+  if(w&&w.station){ const st=(db.stations||[]).find(s=>s.name===w.station&&(!w.owner||s.owner===w.owner)); if(st&&st.lat!=null) return {lat:st.lat,lng:st.lng,name:st.name}; if(st) return {name:st.name}; }
+  return sos.loc?{name:sos.loc}:null;
+}
+function sosLocationText(sos){ const c=sosStationCoords(sos); return c?(c.name||'موقع محدد'):(sos&&sos.loc||'—'); }
+function openAddStation(){
+  const inp='flex:1;background:transparent;border:none;outline:none;color:var(--text);padding:14px 0;font-size:15px;font-family:inherit';
+  const html=`
+    <div class="field"><label>اسم المحطة</label><div class="input-wrap"><span class="ic">📍</span><input id="asName" type="text" placeholder="مثال: محطة ترطيب C"></div></div>
+    <div class="grid-2">
+      <div class="field"><label>خط العرض (Lat)</label><div class="input-wrap"><input id="asLat" type="number" step="any" placeholder="24.7136" style="${inp}"></div></div>
+      <div class="field"><label>خط الطول (Lng)</label><div class="input-wrap"><input id="asLng" type="number" step="any" placeholder="46.6753" style="${inp}"></div></div>
+    </div>
+    <button class="btn btn-block" id="asGeo" style="margin-bottom:12px">📌 استخدام موقعي الحالي</button>
+    <button class="btn btn-orange btn-block" id="asSave">حفظ المحطة</button>
+    <div class="hint-msg" id="asMsg"></div>
+    <div style="color:var(--dim);font-size:12px;margin-top:10px;text-align:center">تلميح: من خرائط Google، اضغط بزر يمين على المكان لنسخ الإحداثيات.</div>`;
+  showModal('➕ إضافة محطة',html);
+  const back=document.querySelector('.modal-back');
+  back.querySelector('#asGeo').addEventListener('click',()=>{
+    const msg=back.querySelector('#asMsg');
+    if(!navigator.geolocation){ msg.className='hint-msg err'; msg.textContent='المتصفح لا يدعم تحديد الموقع.'; return; }
+    msg.className='hint-msg'; msg.textContent='… جارٍ تحديد موقعك';
+    navigator.geolocation.getCurrentPosition(p=>{
+      back.querySelector('#asLat').value=p.coords.latitude.toFixed(6);
+      back.querySelector('#asLng').value=p.coords.longitude.toFixed(6);
+      msg.className='hint-msg ok'; msg.textContent='تم تحديد موقعك ✓';
+    },()=>{ msg.className='hint-msg err'; msg.textContent='تعذّر تحديد الموقع (اسمح بالإذن).'; });
+  });
+  back.querySelector('#asSave').addEventListener('click',async()=>{
+    const name=back.querySelector('#asName').value.trim(), msg=back.querySelector('#asMsg'), btn=back.querySelector('#asSave');
+    if(!name){ msg.className='hint-msg err'; msg.textContent='أدخل اسم المحطة.'; return; }
+    const lat=parseFloat(back.querySelector('#asLat').value), lng=parseFloat(back.querySelector('#asLng').value);
+    const owner=(TS.session()||{}).user||null;
+    btn.disabled=true; msg.className='hint-msg'; msg.textContent='… جارٍ الحفظ';
+    try{ await DB.addStation(name, isNaN(lat)?null:lat, isNaN(lng)?null:lng, owner); renderSpecialist(); back.classList.remove('open'); toast('تمت إضافة المحطة ✓'); }
+    catch(e){ msg.className='hint-msg err'; msg.textContent='تعذّر حفظ المحطة.'; btn.disabled=false; }
+  });
 }
 function openAddWorker(){
   const opt=(v,t)=>`<option value="${v}">${t}</option>`;
@@ -1050,7 +1198,21 @@ function initSpecialist(){
         .catch(()=>toast('تعذّر حذف العامل من قاعدة البيانات.',true));
     }
   });
-  document.getElementById('sosLoc').addEventListener('click',()=>toast('🗺️ عرض موقع العامل على الخريطة: '+document.getElementById('sosPlace').textContent));
+  document.getElementById('addStationBtn').addEventListener('click',openAddStation);
+  document.getElementById('stationBody').addEventListener('click',e=>{
+    const m=e.target.closest('.map-station');
+    if(m){ if(!openMap(parseFloat(m.dataset.lat),parseFloat(m.dataset.lng))) toast('لا توجد إحداثيات لهذه المحطة.',true); return; }
+    const d=e.target.closest('.del-station'); if(!d) return;
+    const st=(db.stations||[]).find(x=>String(x.id)===String(d.dataset.id)); if(!st) return;
+    if(confirm(`حذف المحطة «${st.name}»؟`)){
+      DB.deleteStation(st.id).then(()=>{ renderSpecialist(); toast('تم حذف المحطة.'); }).catch(()=>toast('تعذّر حذف المحطة.',true));
+    }
+  });
+  document.getElementById('sosLoc').addEventListener('click',()=>{
+    const c=sosStationCoords(db.sos);
+    if(c && c.lat!=null){ openMap(c.lat,c.lng); }
+    else toast('📍 موقع العامل: '+(c&&c.name||document.getElementById('sosPlace').textContent)+' (لا توجد إحداثيات على الخريطة).');
+  });
   document.getElementById('showAllHigh').addEventListener('click',()=>{ const n=myWorkers().filter(r=>r.week==='high'||r.week==='danger').length; toast('عدد العمال ذوي التعرّض المرتفع/الخطر: '+n+'.'); });
   document.getElementById('aiBtn').addEventListener('click',()=>openAI(AI.specialistInsights(myWorkers()),'تحليل ذكي لعمالك في الموقع'));
 }

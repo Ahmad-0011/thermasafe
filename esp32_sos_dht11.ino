@@ -37,7 +37,23 @@ const int LED_PIN    = 2;    // onboard LED (optional)
 const int DHT_PIN    = 15;   // DHT11 DATA on GPIO15
 #define   DHT_TYPE   DHT11
 
+// ---- Battery (optional) ----
+const int   BATTERY_PIN  = 34;    // ADC pin, battery via voltage divider
+const float BATT_DIVIDER = 2.0;   // divider ratio (e.g. two equal resistors = 2.0)
+const float BATT_FULL    = 4.2;   // volts = 100%
+const float BATT_EMPTY   = 3.3;   // volts = 0%
+int TEST_BATTERY = -1;            // no battery hardware? set 0..100 (e.g. 15) to test the low warning
+
 DHT dht(DHT_PIN, DHT_TYPE);
+
+int readBattery() {
+  if (TEST_BATTERY >= 0) return TEST_BATTERY;
+  int raw = analogRead(BATTERY_PIN);
+  float v = (raw / 4095.0) * 3.3 * BATT_DIVIDER;
+  int pct = (int)((v - BATT_EMPTY) / (BATT_FULL - BATT_EMPTY) * 100.0);
+  if (pct < 0) pct = 0; if (pct > 100) pct = 100;
+  return pct;
+}
 
 bool lastBtn = HIGH;
 unsigned long lastSend = 0;
@@ -74,11 +90,13 @@ void sendTemperature() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
   if (isnan(t) || isnan(h)) { Serial.println("DHT11 read failed (check wiring)."); return; }
+  int batt = readBattery();
   String body = "{\"p_serial\":\"" + String(WORKER_SERIAL) +
                 "\",\"p_temp\":" + String(t, 1) +
-                ",\"p_hum\":" + String(h, 0) + "}";
+                ",\"p_hum\":" + String(h, 0) +
+                ",\"p_batt\":" + String(batt) + "}";
   int code = postJSON("/rest/v1/rpc/ts_update_temp", body);
-  Serial.printf("Temp %.1fC  Hum %.0f%%  -> HTTP %d\n", t, h, code);
+  Serial.printf("Temp %.1fC  Hum %.0f%%  Batt %d%%  -> HTTP %d\n", t, h, batt, code);
 }
 
 void sendSOS() {
