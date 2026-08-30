@@ -58,20 +58,30 @@ int readBattery() {
 bool lastBtn = HIGH;
 unsigned long lastSend = 0;
 unsigned long lastTemp = 0;
+unsigned long lastRetry = 0;
 const unsigned long TEMP_EVERY = 4000;   // send temperature every 4 seconds
 
 void connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  WiFi.disconnect(true, true);
+  delay(200);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   Serial.print("Connecting to WiFi");
   unsigned long t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) { delay(400); Serial.print("."); }
-  if (WiFi.status() == WL_CONNECTED) Serial.println("\nConnected. IP: " + WiFi.localIP().toString());
-  else Serial.println("\nWiFi connection failed.");
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) { delay(400); Serial.print("."); }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nConnected. IP: " + WiFi.localIP().toString());
+  } else {
+    Serial.println("\nWiFi FAILED. Nearby 2.4GHz networks:");
+    int n = WiFi.scanNetworks();
+    if (n == 0) Serial.println("  (none found - are you near a 2.4GHz router?)");
+    for (int i = 0; i < n; i++) Serial.printf("  '%s'  RSSI %d\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i));
+    Serial.println("Check: SSID spelling, password (case-sensitive), and 2.4GHz (not 5GHz).");
+  }
 }
 
 int postJSON(String path, String body) {
-  if (WiFi.status() != WL_CONNECTED) { connectWiFi(); }
   if (WiFi.status() != WL_CONNECTED) return -1;
   WiFiClientSecure client; client.setInsecure();
   HTTPClient https;
@@ -117,7 +127,10 @@ void setup() {
 }
 
 void loop() {
-  if (millis() - lastTemp > TEMP_EVERY) { lastTemp = millis(); sendTemperature(); }
+  // keep WiFi alive; retry every 15s if disconnected (no error spam)
+  if (WiFi.status() != WL_CONNECTED && millis() - lastRetry > 15000) { lastRetry = millis(); connectWiFi(); }
+
+  if (WiFi.status() == WL_CONNECTED && millis() - lastTemp > TEMP_EVERY) { lastTemp = millis(); sendTemperature(); }
 
   bool b = digitalRead(BUTTON_PIN);
   if (lastBtn == HIGH && b == LOW && millis() - lastSend > 3000) {
