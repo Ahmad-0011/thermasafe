@@ -432,6 +432,7 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
         <div class="thresh-box">
           🏙️ حرارة المدينة:
           <input id="cityInput" type="number" min="0" max="60" step="0.5" value="40"> °C
+          <button class="btn" id="cityGeo" style="padding:8px 14px">📍 موقعي تلقائياً</button>
           <button class="btn" id="citySave" style="padding:8px 14px">حفظ</button>
         </div>
         <span id="dbStatus" style="font-size:12px;color:var(--dim)"></span>
@@ -496,17 +497,33 @@ const store = {
 /* seed data — used as a demo only while Supabase isn't connected */
 function seedDB(){ return {
   accounts:[
-    {user:'worker',pass:'1234',role:'worker',name:'محمد أحمد العتيبي',serial:'TH-20481'},
-    {user:'specialist',pass:'1234',role:'specialist',name:'م. خالد الدوسري',serial:'SF-1001'}
+    {user:'2000',pass:'1234',role:'worker',name:'العامل الاول',serial:'TH-20481'},
+    {user:'2001',pass:'1234',role:'worker',name:'العامل الثاني',serial:'TH-20471'},
+    {user:'2002',pass:'1234',role:'worker',name:'العامل الثالث',serial:'TH-20461'},
+    {user:'1000',pass:'1234',role:'specialist',name:'المختص الاول',serial:'SF-1000'},
+    {user:'1001',pass:'1234',role:'specialist',name:'المختص الثاني',serial:'SF-1001'},
+    {user:'1002',pass:'1234',role:'specialist',name:'المختص الثالث',serial:'SF-1002'}
   ],
   workers:[
-    {name:'محمد أحمد العتيبي',serial:'TH-20481',owner:'specialist',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'سالم ناصر القحطاني',serial:'TH-19872',owner:'specialist',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'أحمد علي الشهري',serial:'TH-17635',owner:'specialist',station:null,day:'safe',week:'safe',month:'safe',status:'safe'}
+    {name:'العامل الاول',serial:'TH-20481',owner:'1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الاول 1',serial:'TH-20482',owner:'1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الاول 2',serial:'TH-20483',owner:'1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثاني',serial:'TH-20471',owner:'1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثاني 1',serial:'TH-20472',owner:'1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثاني 2',serial:'TH-20473',owner:'1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثالث',serial:'TH-20461',owner:'1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثالث 1',serial:'TH-20462',owner:'1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثالث 2',serial:'TH-20463',owner:'1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'}
   ],
   stations:[
-    {id:1,name:'محطة ترطيب A',owner:'specialist',lat:24.7136,lng:46.6753},
-    {id:2,name:'محطة ترطيب B',owner:'specialist',lat:24.7200,lng:46.6800}
+    {id:1,name:'محطة ترطيب A',owner:'1000',lat:24.7136,lng:46.6753},
+    {id:2,name:'محطة ترطيب B',owner:'1000',lat:24.7200,lng:46.6800},
+    {id:3,name:'محطة ترطيب A',owner:'1001',lat:24.7136,lng:46.6753},
+    {id:4,name:'محطة ترطيب A',owner:'1002',lat:24.7136,lng:46.6753}
+  ],
+  alerts:[
+    {serial:'TH-20481',kind:'sos',level:'danger',message:'نداء استغاثة (SOS) من العامل - وحدة الإنتاج 3',created_at:new Date(Date.now()-2*864e5).toISOString()},
+    {serial:'TH-20481',kind:'system',level:'danger',message:'تنبيه النظام: بلغت حرارة العامل مستوى الخطر (41.2°م)',created_at:new Date(Date.now()-864e5).toISOString()}
   ],
   sos:null,
   threshold:38,
@@ -602,6 +619,21 @@ const DB={
       const {error}=await this.sb.rpc('ts_delete_station',{p_id:id});
       if(error) throw error; await this.refresh();
     }else{ db.stations=(db.stations||[]).filter(s=>s.id!==id); store.set('ts_db',db); }
+  },
+  async getReport(serial){
+    if(this.mode==='supabase'){
+      const [d,a]=await Promise.all([
+        this.sb.from('daily_stats').select('*').eq('serial',serial).order('d',{ascending:false}).limit(35),
+        this.sb.from('alerts').select('*').eq('serial',serial).order('created_at',{ascending:false}).limit(30)
+      ]);
+      return {
+        days:(d.data||[]).map(r=>({d:r.d,avg:(r.cnt?Number(r.sum_temp)/r.cnt:null),max:r.max_temp})),
+        alerts:(a.data||[])
+      };
+    }
+    /* وضع محلي: بيانات تجريبية */
+    const days=[]; for(let i=0;i<14;i++){ const dt=new Date(); dt.setDate(dt.getDate()-i); days.push({d:dt.toISOString().slice(0,10),avg:Math.round((28+Math.random()*14)*10)/10,max:Math.round(32+Math.random()*12)}); }
+    return {days, alerts:(db.alerts||[]).filter(x=>x.serial===serial)};
   },
   async login(u,p){
     if(this.mode==='supabase'){
@@ -862,7 +894,7 @@ function initLogin(){
   document.querySelectorAll('.pw-toggle').forEach(b=>b.addEventListener('click',()=>{ const t=document.getElementById(b.dataset.target); t.type=t.type==='password'?'text':'password'; }));
   document.getElementById('toSignup').addEventListener('click',e=>{ e.preventDefault(); document.getElementById('loginView').style.display='none'; document.getElementById('signupView').style.display='block'; });
   document.getElementById('toLogin').addEventListener('click',e=>{ e.preventDefault(); document.getElementById('signupView').style.display='none'; document.getElementById('loginView').style.display='block'; });
-  document.getElementById('forgot').addEventListener('click',e=>{ e.preventDefault(); toast('للتجربة: اسم المستخدم <b>worker</b> أو <b>specialist</b> وكلمة المرور <b>1234</b>'); });
+  document.getElementById('forgot').addEventListener('click',e=>{ e.preventDefault(); toast('للتجربة — عامل: <b>2000</b> · مختص: <b>1000</b> · كلمة المرور: <b>1234</b>'); });
   const doLogin=async()=>{
     const u=document.getElementById('lgUser').value,p=document.getElementById('lgPass').value,msg=document.getElementById('loginMsg');
     if(!u||!p){ msg.className='hint-msg err'; msg.textContent='يرجى إدخال اسم المستخدم وكلمة المرور.'; return; }
@@ -946,18 +978,8 @@ function initWorker(){
   });
   document.getElementById('goStation').addEventListener('click',()=>toast('🧭 جاري توجيهك إلى محطة الترطيب A (120 متر).'));
   document.getElementById('downloadPdf').addEventListener('click',()=>{
-    const lvl=AI.levelFromHours(worker.weekHours);
-    const rows=[
-      ['العامل',worker.name],['الرقم التسلسلي',worker.serial],
-      ['مدة التعرّض هذا الأسبوع',worker.weekHours+' ساعة'],
-      ['درجة الحرارة',worker.temp+'°C'],['الرطوبة',worker.humidity+'%'],
-      ['مستوى الجرعة الحرارية (HED)',lvl.label],
-      ['التوصية','خذ استراحة 15 دقيقة، واشرب الماء بانتظام'],
-      ['تاريخ الإصدار',new Date().toLocaleString('ar')]
-    ];
-    const html=`<table class="data" style="text-align:right">${rows.map(([k,v])=>`<tr><td style="color:var(--muted);text-align:right">${k}</td><td style="font-weight:700;text-align:left">${v}</td></tr>`).join('')}</table>
-      <div style="text-align:center;margin-top:16px"><button class="btn" onclick="window.print()">🖨️ طباعة / حفظ PDF</button></div>`;
-    showModal('📄 تقرير السلامة الأسبوعي',html);
+    const s2=TS.session(); const row=db.workers.find(x=>x.serial===s2.serial)||{name:s2.name,serial:s2.serial,status:'safe'};
+    openWorkerReport(row);
   });
   document.getElementById('sosBtn').addEventListener('click',()=>{
     if(confirm('إرسال نداء استغاثة (SOS) إلى مختص السلامة مع موقعك الحالي؟')){
@@ -1017,25 +1039,44 @@ function updateWorkerTemp(){
     const rr=document.getElementById('rRec'); if(rr) rr.textContent = row.status==='danger'?'أوقف العمل فوراً':row.status==='high'?'استراحة كل ساعة':row.status==='mid'?'راقب حالتك':'الوضع آمن';
   }
 }
-function openWorkerReport(w){
-  const rec = w.status==='danger'?'إيقاف العمل فوراً والانتقال لمكان مظلل مع الترطيب':
-              w.status==='high'?'استراحة 15 دقيقة كل ساعة وشرب الماء بانتظام':
-              w.status==='mid'?'مراقبة الحالة وأخذ فترات راحة دورية':
-              'الوضع آمن — متابعة اعتيادية';
-  const rows=[
-    ['اسم العامل',w.name],['الرقم التسلسلي',w.serial],
-    ['المحطة / الموقع', w.station||'—'],
-    ['الحرارة الحالية', fmtTemp(w.temperature)],
-    ['آخر تحديث', w.temp_at?new Date(w.temp_at).toLocaleString('ar'):'—'],
-    ['الحالة الآن', LABELS[w.status]||'—'],
-    ['تقرير اليوم', LABELS[w.day]||'—'],
-    ['التقرير الأسبوعي', LABELS[w.week]||'—'],
-    ['التقرير الشهري', LABELS[w.month]||'—'],
-    ['الجرعة الأسبوعية (نقاط)', w.dose_week!=null?Math.round(Number(w.dose_week)):'—'],
-    ['الجرعة الشهرية (نقاط)', w.dose_month!=null?Math.round(Number(w.dose_month)):'—'],
-    ['التوصية', rec]
-  ];
-  const html=`<table class="data" style="text-align:right">${rows.map(([k,v])=>`<tr><td style="color:var(--muted);text-align:right">${k}</td><td style="font-weight:700;text-align:left">${v}</td></tr>`).join('')}</table>`;
+let _repW=null,_repData=null;
+async function openWorkerReport(w){
+  _repW=w;
+  showModal('📄 تقرير العامل: '+w.name,'<div class="ai-typing">… جارٍ تحميل التقرير</div>');
+  try{ _repData=await DB.getReport(w.serial); }catch(e){ _repData={days:[],alerts:[]}; }
+  renderReport('week');
+}
+function statusFromTemp(t,th){ if(t==null) return 'safe'; return t>=th?'danger':t>=th-2?'high':t>=th-6?'mid':'safe'; }
+function renderReport(mode){
+  const w=_repW, rep=_repData||{days:[],alerts:[]}, th=db.threshold||38;
+  const days=(rep.days||[]).slice().sort((a,b)=>new Date(b.d)-new Date(a.d));
+  const dayRow=r=>{ const avg=r.avg!=null?Math.round(r.avg*10)/10:null; const col=statusColor(statusFromTemp(avg,th));
+    const name=new Date(r.d).toLocaleDateString('ar',{weekday:'short',day:'numeric',month:'short'});
+    return `<tr><td style="text-align:right">${name}</td><td style="color:${col};font-weight:700">${avg!=null?avg+'°C':'—'}</td><td>${r.max!=null?Math.round(r.max)+'°C':'—'}</td></tr>`; };
+  let body='';
+  if(mode==='week'){
+    const sel=days.slice(0,7);
+    body=`<table class="data" style="text-align:center"><thead><tr><th>اليوم</th><th>متوسط الحرارة</th><th>الأعلى</th></tr></thead><tbody>${sel.map(dayRow).join('')||'<tr><td colspan="3" style="color:var(--dim)">لا توجد بيانات بعد</td></tr>'}</tbody></table>`;
+  }else{
+    const sel=days.slice(0,30); const weeks=[];
+    for(let i=0;i<sel.length;i+=7) weeks.push(sel.slice(i,i+7));
+    body=weeks.map((rows,i)=>{ const av=rows.reduce((s,r)=>s+(r.avg||0),0)/(rows.length||1); const col=statusColor(statusFromTemp(av,th));
+      return `<div style="margin-bottom:12px"><div style="font-weight:800;color:var(--muted);margin:6px 0">الأسبوع ${i+1} — متوسط: <span style="color:${col}">${Math.round(av*10)/10}°C</span></div>
+        <table class="data" style="text-align:center"><thead><tr><th>اليوم</th><th>متوسط</th><th>الأعلى</th></tr></thead><tbody>${rows.map(dayRow).join('')}</tbody></table></div>`;
+    }).join('')||'<div style="color:var(--dim)">لا توجد بيانات بعد</div>';
+  }
+  const alerts=(rep.alerts||[]);
+  const alertsHtml=alerts.length? alerts.map(a=>{ const t=new Date(a.created_at).toLocaleString('ar',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); const sos=a.kind==='sos';
+    return `<div class="ai-item ${sos?'crit':'warn'}" style="margin-bottom:8px"><b>${sos?'🆘 نداء استغاثة':'⚠️ تنبيه نظام'} — ${t}</b>${a.message||''}</div>`; }).join('')
+    : '<div style="color:var(--dim)">لا توجد تنبيهات</div>';
+  const tab=(m,l)=>`<div class="tab ${mode===m?'active':''}" style="cursor:pointer" onclick="renderReport('${m}')">${l}</div>`;
+  const html=`
+    <div style="color:var(--muted);font-size:13px;margin-bottom:12px;line-height:1.8">
+      ${w.serial} · المحطة: ${w.station||'—'} · الحالة الآن: <b style="color:${statusColor(w.status)}">${LABELS[w.status]||'—'}</b> · الحرارة: <b>${fmtTemp(w.temperature)}</b>
+    </div>
+    <div class="tabs" style="margin-bottom:14px">${tab('week','📅 التقرير الأسبوعي')}${tab('month','🗓️ التقرير الشهري')}</div>
+    ${body}
+    <div style="margin-top:18px"><div style="font-weight:800;margin-bottom:8px">📢 سجل التنبيهات (العامل / النظام)</div>${alertsHtml}</div>`;
   showModal('📄 تقرير العامل: '+w.name, html);
 }
 
@@ -1186,6 +1227,22 @@ function initSpecialist(){
     const v=parseFloat(document.getElementById('cityInput').value);
     if(isNaN(v)||v<0||v>60){ toast('أدخل قيمة بين 0 و 60 درجة.',true); return; }
     DB.setCity(v).then(()=>{ renderSpecialist(); toast('تم تحديث حرارة المدينة إلى '+v+'°C ✓'); }).catch(()=>toast('تعذّر حفظ حرارة المدينة.',true));
+  });
+  document.getElementById('cityGeo').addEventListener('click',()=>{
+    if(!navigator.geolocation){ toast('المتصفح لا يدعم تحديد الموقع.',true); return; }
+    toast('… جارٍ تحديد موقعك وجلب حرارة المدينة');
+    navigator.geolocation.getCurrentPosition(async p=>{
+      try{
+        const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+p.coords.latitude+'&longitude='+p.coords.longitude+'&current=temperature_2m');
+        const j=await r.json();
+        const t=j&&j.current&&j.current.temperature_2m;
+        if(t==null){ toast('تعذّر جلب حرارة الطقس.',true); return; }
+        const v=Math.round(t*10)/10;
+        document.getElementById('cityInput').value=v;
+        await DB.setCity(v); renderSpecialist();
+        toast('🏙️ حرارة مدينتك الآن '+v+'°C (حسب موقعك) ✓');
+      }catch(e){ toast('تعذّر جلب حرارة الطقس. تحقق من الاتصال.',true); }
+    },()=>toast('تعذّر تحديد الموقع (اسمح بالإذن في المتصفح).',true));
   });
   document.getElementById('reportBody').addEventListener('click',e=>{
     const rep=e.target.closest('.rep-worker');
