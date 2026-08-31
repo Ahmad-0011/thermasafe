@@ -1,11 +1,13 @@
 /* ============================================================
-   ThermaSafe - ESP32 + DHT11 + SOS button
+   ThermaSafe - ESP32 + MLX90614 (infrared body temperature) + SOS
+   ------------------------------------------------------------
+   Measures the worker's body temperature (non-contact IR) and sends
+   it to Supabase; SOS button sends an instant alert.
    WiFi is configured from the Serial Monitor and SAVED to flash.
-   -> Upload once. First boot asks you to pick a network + password.
-      After that it connects automatically on every boot.
-      To change WiFi later: send 'c' in the Serial Monitor anytime.
 
-   Libraries: "DHT sensor library" + "Adafruit Unified Sensor"
+   Libraries (Arduino IDE -> Library Manager):
+     - "Adafruit MLX90614 Library"
+     - "Adafruit BusIO"
    Serial Monitor: 115200 baud, line ending = "Newline".
    ============================================================ */
 
@@ -13,7 +15,8 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
-#include "DHT.h"
+#include <Wire.h>
+#include <Adafruit_MLX90614.h>
 
 // ---- Supabase (ready) ----
 const char* SUPABASE_URL = "https://uwpycowwylwjwezzxdfk.supabase.co";
@@ -25,10 +28,9 @@ const char* WORKER_NAME   = "Worker";
 const char* WORKER_LOC    = "Production Unit 3";
 
 // ---- Pins ----
-const int BUTTON_PIN = 4;
-const int LED_PIN    = 2;
-const int DHT_PIN    = 15;
-#define   DHT_TYPE   DHT11
+const int BUTTON_PIN = 4;    // SOS button between GPIO4 and GND
+const int LED_PIN    = 2;    // onboard LED (optional)
+// MLX90614 uses I2C: SDA -> GPIO21 , SCL -> GPIO22 (ESP32 defaults)
 
 // ---- Battery (optional) ----
 const int   BATTERY_PIN  = 34;
@@ -37,10 +39,10 @@ const float BATT_FULL    = 4.2;
 const float BATT_EMPTY   = 3.3;
 int TEST_BATTERY = -1;   // set 0..100 (e.g. 15) to test the low-battery warning without hardware
 
-DHT dht(DHT_PIN, DHT_TYPE);
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 Preferences prefs;
-String wifiSSID = "";
-String wifiPASS = "";
+String wifiSSID = "", wifiPASS = "";
+bool  mlxOK = false;
 
 bool lastBtn = HIGH;
 unsigned long lastSend = 0, lastTemp = 0, lastRetry = 0;
@@ -48,60 +50,37 @@ const unsigned long TEMP_EVERY = 4000;
 
 String readLine() {
   while (Serial.available() == 0) { delay(50); }
-  delay(60);
-  String s = Serial.readStringUntil('\n');
-  s.trim();
-  return s;
+  delay(60); String s = Serial.readStringUntil('\n'); s.trim(); return s;
 }
-
-void loadCreds() {
-  prefs.begin("thermasafe", true);
-  wifiSSID = prefs.getString("ssid", "");
-  wifiPASS = prefs.getString("pass", "");
-  prefs.end();
-}
-void saveCreds(String s, String p) {
-  prefs.begin("thermasafe", false);
-  prefs.putString("ssid", s);
-  prefs.putString("pass", p);
-  prefs.end();
-  wifiSSID = s; wifiPASS = p;
-}
+void loadCreds() { prefs.begin("thermasafe", true); wifiSSID = prefs.getString("ssid", ""); wifiPASS = prefs.getString("pass", ""); prefs.end(); }
+void saveCreds(String s, String p) { prefs.begin("thermasafe", false); prefs.putString("ssid", s); prefs.putString("pass", p); prefs.end(); wifiSSID = s; wifiPASS = p; }
 
 bool tryConnect(uint32_t timeoutMs) {
   if (wifiSSID == "") return false;
-  WiFi.disconnect(true, true); delay(200);
-  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true, true); delay(200); WiFi.mode(WIFI_STA);
   WiFi.begin(wifiSSID.c_str(), wifiPASS.c_str());
   Serial.print("Connecting to '"); Serial.print(wifiSSID); Serial.print("' ");
   unsigned long t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < timeoutMs) { delay(400); Serial.print("."); }
   if (WiFi.status() == WL_CONNECTED) { Serial.println("\nConnected. IP: " + WiFi.localIP().toString()); return true; }
-  Serial.println("\nCould not connect.");
-  return false;
+  Serial.println("\nCould not connect."); return false;
 }
-
-// Serial wizard: scan -> pick -> password -> save -> connect
 void serialWifiSetup() {
-  Serial.println("\n=== WiFi Setup ===");
-  Serial.println("Scanning networks...");
+  Serial.println("\n=== WiFi Setup ===\nScanning networks...");
   WiFi.mode(WIFI_STA); WiFi.disconnect(true, true); delay(300);
   int n = WiFi.scanNetworks();
-  if (n <= 0) { Serial.println("No networks found (need a 2.4GHz network). Press RESET."); return; }
-  Serial.println("Nearby networks (2.4GHz only):");
-  for (int i = 0; i < n; i++)
-    Serial.printf("  %2d)  %-26s  RSSI %d %s\n", i, WiFi.SSID(i).c_str(), WiFi.RSSI(i),
-                  (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "(open)" : "");
+  if (n <= 0) { Serial.println("No networks (need 2.4GHz). Press RESET."); return; }
+  for (int i = 0; i < n; i++) Serial.printf("  %2d)  %-26s  RSSI %d\n", i, WiFi.SSID(i).c_str(), WiFi.RSSI(i));
   Serial.println("\nType the NUMBER of your network + Enter:");
   int idx = readLine().toInt();
-  if (idx < 0 || idx >= n) { Serial.println("Invalid number. Send 'c' to retry."); return; }
+  if (idx < 0 || idx >= n) { Serial.println("Invalid. Send 'c' to retry."); return; }
   String ssid = WiFi.SSID(idx);
   Serial.print("Selected: "); Serial.println(ssid);
-  Serial.println("Type the PASSWORD + Enter (empty for open network):");
+  Serial.println("Type the PASSWORD + Enter:");
   String pass = readLine();
   saveCreds(ssid, pass);
-  if (tryConnect(15000)) Serial.println("Saved. It will auto-connect from now on.");
-  else Serial.println("Wrong password or 5GHz network. Send 'c' to try again.");
+  if (tryConnect(15000)) Serial.println("Saved. Auto-connects from now on.");
+  else Serial.println("Wrong password or 5GHz. Send 'c' to retry.");
 }
 
 int readBattery() {
@@ -128,51 +107,43 @@ int postJSON(String path, String body) {
 }
 
 void sendTemperature() {
-  float t = dht.readTemperature(), h = dht.readHumidity();
-  if (isnan(t) || isnan(h)) { Serial.println("DHT11 read failed (check wiring)."); return; }
+  if (!mlxOK) { Serial.println("MLX90614 not found (check I2C wiring)."); return; }
+  float body = mlx.readObjectTempC();     // worker body temperature (non-contact)
+  if (isnan(body) || body < -20 || body > 200) { Serial.println("MLX read invalid."); return; }
   int batt = readBattery();
-  String body = "{\"p_serial\":\"" + String(WORKER_SERIAL) + "\",\"p_temp\":" + String(t,1) +
-                ",\"p_hum\":" + String(h,0) + ",\"p_batt\":" + String(batt) + "}";
-  int code = postJSON("/rest/v1/rpc/ts_update_temp", body);
-  Serial.printf("Temp %.1fC  Hum %.0f%%  Batt %d%%  -> HTTP %d\n", t, h, batt, code);
+  String json = "{\"p_serial\":\"" + String(WORKER_SERIAL) + "\",\"p_temp\":" + String(body, 1) +
+                ",\"p_batt\":" + String(batt) + "}";
+  int code = postJSON("/rest/v1/rpc/ts_update_temp", json);
+  Serial.printf("Body %.1fC  Batt %d%%  -> HTTP %d\n", body, batt, code);
 }
 
 void sendSOS() {
-  String body = "{\"serial\":\"" + String(WORKER_SERIAL) + "\",\"name\":\"" + WORKER_NAME +
+  String json = "{\"serial\":\"" + String(WORKER_SERIAL) + "\",\"name\":\"" + WORKER_NAME +
                 "\",\"location\":\"" + WORKER_LOC + "\"}";
-  int code = postJSON("/rest/v1/sos_alerts", body);
+  int code = postJSON("/rest/v1/sos_alerts", json);
   Serial.printf("SOS sent -> HTTP %d %s\n", code, (code==201||code==204)?"OK":"CHECK");
 }
 
 void setup() {
-  Serial.begin(115200); delay(600);
-  Serial.setTimeout(30000);
+  Serial.begin(115200); delay(600); Serial.setTimeout(30000);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT); digitalWrite(LED_PIN, LOW);
-  dht.begin();
+  Wire.begin();                 // SDA=GPIO21, SCL=GPIO22 by default
+  mlxOK = mlx.begin();
+  Serial.println(mlxOK ? "MLX90614 ready." : "MLX90614 NOT found - check SDA/SCL/power.");
   loadCreds();
 
-  Serial.println("\nThermaSafe device starting...");
   Serial.println("Send 'c' + Enter within 4 seconds to configure WiFi.");
-  unsigned long t0 = millis(); bool wantCfg = false;
-  while (millis() - t0 < 4000) {
-    if (Serial.available()) { String s = Serial.readStringUntil('\n'); s.trim(); if (s == "c" || s == "C") wantCfg = true; break; }
-    delay(50);
-  }
-
-  if (wantCfg || wifiSSID == "") serialWifiSetup();
+  unsigned long t0 = millis(); bool cfg = false;
+  while (millis() - t0 < 4000) { if (Serial.available()) { String s = Serial.readStringUntil('\n'); s.trim(); if (s=="c"||s=="C") cfg=true; break; } delay(50); }
+  if (cfg || wifiSSID == "") serialWifiSetup();
   else if (!tryConnect(15000)) { Serial.println("Saved WiFi failed - opening setup."); serialWifiSetup(); }
-
   Serial.println("Ready. (Send 'c' anytime to change WiFi.)");
 }
 
 void loop() {
-  // allow WiFi reconfigure anytime
-  if (Serial.available()) { String s = Serial.readStringUntil('\n'); s.trim(); if (s == "c" || s == "C") serialWifiSetup(); }
-
-  // keep WiFi alive
+  if (Serial.available()) { String s = Serial.readStringUntil('\n'); s.trim(); if (s=="c"||s=="C") serialWifiSetup(); }
   if (WiFi.status() != WL_CONNECTED && millis() - lastRetry > 15000) { lastRetry = millis(); tryConnect(10000); }
-
   if (WiFi.status() == WL_CONNECTED && millis() - lastTemp > TEMP_EVERY) { lastTemp = millis(); sendTemperature(); }
 
   bool b = digitalRead(BUTTON_PIN);
@@ -185,4 +156,9 @@ void loop() {
   delay(20);
 }
 
-/* Wiring:  DHT11 VCC->3V3 DATA->GPIO15 GND->GND ; Button GPIO4<->GND */
+/* ============================================================
+   MLX90614 (GY-906) wiring:
+     VIN/VCC -> 3V3 , GND -> GND , SDA -> GPIO21 , SCL -> GPIO22
+   Button: one leg -> GPIO4 , other leg -> GND
+   Point the sensor at the skin/forehead (~2-5 cm) for body temp.
+   ============================================================ */

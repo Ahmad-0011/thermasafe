@@ -163,7 +163,7 @@ create or replace function public.ts_set_station(p_serial text, p_station text) 
   update public.workers set station=p_station where serial=p_serial; $$;
 
 -- تحديث الحرارة: حالة + جرعة + سجل يومي + تنبيه نظام عند بلوغ الخطر
-create or replace function public.ts_update_temp(p_serial text, p_temp numeric, p_hum numeric, p_batt numeric default null)
+create or replace function public.ts_update_temp(p_serial text, p_temp numeric, p_hum numeric default null, p_batt numeric default null)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_thr numeric; v_city numeric; v_eff numeric; v_status text; v_old text; v_inc numeric;
 begin
@@ -173,7 +173,7 @@ begin
   v_status := public.status_from_temp(v_eff, v_thr);
   v_inc := greatest(0, v_eff-(v_thr-8));
   select status into v_old from public.workers where serial=p_serial;
-  update public.workers set temperature=p_temp, humidity=p_hum, battery=coalesce(p_batt,battery), temp_at=now(),
+  update public.workers set temperature=p_temp, humidity=coalesce(p_hum,humidity), battery=coalesce(p_batt,battery), temp_at=now(),
      status=v_status, day=v_status, dose_week=dose_week+v_inc, dose_month=dose_month+v_inc,
      week=public.level_from_dose(dose_week+v_inc), month=public.level_from_dose(dose_month+v_inc)
    where serial=p_serial;
