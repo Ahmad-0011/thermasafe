@@ -233,7 +233,25 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
   .topbar{padding:14px 18px;} .brand{font-size:17px;letter-spacing:2px;}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+/* شاشة البداية (Splash) — شعار ThermaSafe عند فتح التطبيق */
+#splash{position:fixed;inset:0;z-index:200;background:#050506;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;transition:opacity .6s ease;}
+#splash.hide{opacity:0;pointer-events:none;}
+#splash .sp-mark{height:120px;animation:sppop .8s ease both;}
+#splash .sp-mark svg{height:100%;width:auto;filter:drop-shadow(0 12px 34px rgba(240,130,31,.4));}
+#splash .sp-word{font-size:clamp(26px,7vw,36px);font-weight:800;letter-spacing:8px;color:#dbe6f5;margin-top:18px;}
+#splash .sp-word b{color:var(--orange);}
+#splash .sp-tag{font-size:12px;letter-spacing:5px;color:#6f83a0;margin-top:10px;}
+#splash .sp-tag b{color:var(--orange);}
+@keyframes sppop{0%{opacity:0;transform:scale(.85) translateY(12px)}100%{opacity:1;transform:none}}
 </style>
+
+<div id="splash">
+  <div class="sp-mark" id="spMark"></div>
+  <div class="sp-word">THERM<b>A</b>SAFE</div>
+  <div class="sp-tag">HEAT RISK. PREDICT. <b>PROTECT.</b></div>
+</div>
 
 <div class="side-scene"></div>
 <header class="topbar" id="topbar"></header>
@@ -1288,11 +1306,14 @@ function initSpecialist(){
 /* ---------------- boot ---------------- */
 async function boot(){
   document.getElementById('heroMark').innerHTML=logoSVG();
+  const spm=document.getElementById('spMark'); if(spm) spm.innerHTML=logoSVG();
   if(!location.hash) location.hash='landing';
   route();
   await DB.init();
 }
 boot();
+/* إخفاء شاشة البداية بعد لحظة */
+setTimeout(()=>{ const s=document.getElementById('splash'); if(s){ s.classList.add('hide'); setTimeout(()=>s.remove(),700); } },1700);
 
 /* ---------------- PWA: install as an app + offline shell ---------------- */
 if('serviceWorker' in navigator){
