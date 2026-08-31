@@ -107,8 +107,39 @@ begin
   v_serial := coalesce(nullif(p_serial,''), 'TH-'||floor(random()*90000+10000)::int::text);
   insert into public.workers(name,serial,owner,day,week,month,status)
   values (p_name,v_serial,p_owner,p_level,p_level,p_level,p_level) on conflict (serial) do nothing;
-  if p_account and not exists (select 1 from public.accounts where username=lower(v_serial)) then
-    insert into public.accounts(username,password,role,name,serial) values (lower(v_serial),'1234','worker',p_name,v_serial); end if;
+  if p_account and not exists (select 1 from public.accounts where username=v_serial) then
+    insert into public.accounts(username,password,role,name,serial) values (v_serial,'1234','worker',p_name,v_serial); end if;
+end; $$;
+
+-- ---------- إدارة الحسابات (المختص) : اسم المستخدم = الرقم التسلسلي ----------
+create or replace function public.ts_list_accounts(p_owner text)
+returns table(username text, password text, name text, serial text, role text)
+language sql security definer set search_path = public as $$
+  select a.username, a.password, a.name, a.serial, a.role from public.accounts a
+  where a.serial in (select serial from public.workers where owner = p_owner)
+  order by a.role, a.name;
+$$;
+
+create or replace function public.ts_create_account(p_role text, p_name text, p_serial text, p_pass text, p_owner text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v_serial text;
+begin
+  v_serial := coalesce(nullif(p_serial,''), (case when p_role='worker' then 'TH-' else 'SF-' end)||floor(random()*90000+10000)::int::text);
+  if exists (select 1 from public.accounts where username = v_serial) then raise exception 'USER_EXISTS'; end if;
+  insert into public.accounts(username,password,role,name,serial)
+  values (v_serial, coalesce(nullif(p_pass,''),'1234'), p_role, p_name, v_serial);
+  if p_role='worker' and not exists (select 1 from public.workers where serial=v_serial) then
+    insert into public.workers(name,serial,owner) values (p_name, v_serial, p_owner);
+  end if;
+  return v_serial;
+end; $$;
+
+create or replace function public.ts_set_password(p_username text, p_pass text, p_owner text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.accounts set password = p_pass
+   where username = p_username
+     and serial in (select serial from public.workers where owner = p_owner);
 end; $$;
 
 create or replace function public.ts_delete_worker(p_serial text)
@@ -178,6 +209,9 @@ grant execute on function public.ts_add_station(text,numeric,numeric,text)   to 
 grant execute on function public.ts_delete_station(bigint)                  to anon, authenticated;
 grant execute on function public.ts_set_station(text,text)                  to anon, authenticated;
 grant execute on function public.ts_update_temp(text,numeric,numeric,numeric) to anon, authenticated;
+grant execute on function public.ts_list_accounts(text)                     to anon, authenticated;
+grant execute on function public.ts_create_account(text,text,text,text,text) to anon, authenticated;
+grant execute on function public.ts_set_password(text,text,text)            to anon, authenticated;
 
 -- ---------- Realtime ----------
 do $$
@@ -191,24 +225,25 @@ end $$;
 -- ---------- بيانات ابتدائية ----------
 insert into public.settings(id, temp_threshold, city_temp) values (1, 38, 40) on conflict (id) do nothing;
 
+-- اسم المستخدم = الرقم التسلسلي دائماً
 insert into public.accounts(username, password, role, name, serial) values
-  ('2000','1234','worker','العامل الاول','TH-20481'),
-  ('2001','1234','worker','العامل الثاني','TH-20471'),
-  ('2002','1234','worker','العامل الثالث','TH-20461'),
-  ('1000','1234','specialist','المختص الاول','SF-1000'),
-  ('1001','1234','specialist','المختص الثاني','SF-1001'),
-  ('1002','1234','specialist','المختص الثالث','SF-1002')
+  ('TH-20481','1234','worker','العامل الاول','TH-20481'),
+  ('TH-20471','1234','worker','العامل الثاني','TH-20471'),
+  ('TH-20461','1234','worker','العامل الثالث','TH-20461'),
+  ('SF-1000','1234','specialist','المختص الاول','SF-1000'),
+  ('SF-1001','1234','specialist','المختص الثاني','SF-1001'),
+  ('SF-1002','1234','specialist','المختص الثالث','SF-1002')
 on conflict (username) do nothing;
 
 insert into public.workers(name, serial, owner) values
-  ('العامل الاول','TH-20481','1000'), ('العامل الاول 1','TH-20482','1000'), ('العامل الاول 2','TH-20483','1000'),
-  ('العامل الثاني','TH-20471','1001'), ('العامل الثاني 1','TH-20472','1001'), ('العامل الثاني 2','TH-20473','1001'),
-  ('العامل الثالث','TH-20461','1002'), ('العامل الثالث 1','TH-20462','1002'), ('العامل الثالث 2','TH-20463','1002')
+  ('العامل الاول','TH-20481','SF-1000'), ('العامل الاول 1','TH-20482','SF-1000'), ('العامل الاول 2','TH-20483','SF-1000'),
+  ('العامل الثاني','TH-20471','SF-1001'), ('العامل الثاني 1','TH-20472','SF-1001'), ('العامل الثاني 2','TH-20473','SF-1001'),
+  ('العامل الثالث','TH-20461','SF-1002'), ('العامل الثالث 1','TH-20462','SF-1002'), ('العامل الثالث 2','TH-20463','SF-1002')
 on conflict (serial) do nothing;
 
 insert into public.stations(name, owner, lat, lng) values
-  ('محطة ترطيب A','1000',24.7136,46.6753), ('محطة ترطيب B','1000',24.7200,46.6800),
-  ('محطة ترطيب A','1001',24.7136,46.6753), ('محطة ترطيب A','1002',24.7136,46.6753);
+  ('محطة ترطيب A','SF-1000',24.7136,46.6753), ('محطة ترطيب B','SF-1000',24.7200,46.6800),
+  ('محطة ترطيب A','SF-1001',24.7136,46.6753), ('محطة ترطيب A','SF-1002',24.7136,46.6753);
 
 -- سجل حرارة يومي تجريبي: 30 يوماً لكل عامل
 insert into public.daily_stats(serial, d, sum_temp, max_temp, cnt)

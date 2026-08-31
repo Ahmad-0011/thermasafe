@@ -303,30 +303,11 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
           <div class="input-wrap"><span class="ic">🔒</span><input id="lgPass" type="password" placeholder="أدخل كلمة المرور"><button class="pw-toggle" data-target="lgPass">👁</button></div></div>
         <button class="btn btn-primary btn-block" id="loginBtn">دخول ←</button>
         <div class="hint-msg" id="loginMsg"></div>
-        <div class="auth-divider">أو</div>
-        <div class="auth-links">
-          <a href="#" id="forgot">‹ هل نسيت كلمة المرور</a>
-          <a href="#" class="create" id="toSignup">＋ إنشاء حساب جديد</a>
+        <div class="auth-links" style="margin-top:18px">
+          <a href="#" id="forgot">‹ هل نسيت كلمة المرور؟</a>
         </div>
       </div>
-
-      <div id="signupView" style="display:none">
-        <h2>إنشاء حساب جديد</h2>
-        <div class="sub">سجّل بياناتك للانضمام إلى النظام</div>
-        <div class="field"><label>الاسم الكامل</label>
-          <div class="input-wrap"><span class="ic">🪪</span><input id="suName" type="text" placeholder="مثال: محمد أحمد"></div></div>
-        <div class="field"><label>الرقم التسلسلي (اختياري)</label>
-          <div class="input-wrap"><span class="ic">🏷️</span><input id="suSerial" type="text" placeholder="يُنشأ تلقائياً إن تُرك فارغاً"></div></div>
-        <div class="field"><label>اسم المستخدم</label>
-          <div class="input-wrap"><span class="ic">👤</span><input id="suUser" type="text" placeholder="اسم مستخدم فريد"></div></div>
-        <div class="field"><label>كلمة المرور</label>
-          <div class="input-wrap"><span class="ic">🔒</span><input id="suPass" type="password" placeholder="أدخل كلمة المرور"><button class="pw-toggle" data-target="suPass">👁</button></div></div>
-        <button class="btn btn-primary btn-block" id="signupBtn">إنشاء الحساب وتسجيل الدخول</button>
-        <div class="hint-msg" id="signupMsg"></div>
-        <div class="auth-divider">أو</div>
-        <div class="auth-links"><a href="#" class="create" id="toLogin" style="color:var(--orange-soft)">‹ لديك حساب؟ تسجيل الدخول</a></div>
-      </div>
-      <div class="footer-note">© 2024 THERMASAFE. جميع الحقوق محفوظة.</div>
+      <div class="footer-note">© 2026 THERMASAFE. جميع الحقوق محفوظة.</div>
     </div>
   </div>
 </section>
@@ -477,6 +458,16 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
     </div>
 
     <div class="card">
+      <h3 class="card-title left" style="color:var(--teal-soft)">🔑 حسابات الدخول</h3>
+      <div style="color:var(--dim);font-size:12px;margin-bottom:10px">اسم المستخدم = الرقم التسلسلي دائماً · كلمة المرور ظاهرة للمختص</div>
+      <button class="btn btn-orange" id="addAccountBtn" style="padding:10px 16px;margin-bottom:12px">➕ إنشاء حساب</button>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>كلمة المرور</th><th>الدور</th><th>تغيير</th></tr></thead>
+        <tbody id="accountBody"></tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
       <h3 class="card-title left" style="color:var(--teal-soft)">📍 المحطات / المواقع</h3>
       <button class="btn btn-orange" id="addStationBtn" style="padding:10px 16px;margin-bottom:12px">➕ إضافة محطة</button>
       <div class="table-wrap"><table class="data">
@@ -526,29 +517,29 @@ const store = {
 /* seed data — used as a demo only while Supabase isn't connected */
 function seedDB(){ return {
   accounts:[
-    {user:'2000',pass:'1234',role:'worker',name:'العامل الاول',serial:'TH-20481'},
-    {user:'2001',pass:'1234',role:'worker',name:'العامل الثاني',serial:'TH-20471'},
-    {user:'2002',pass:'1234',role:'worker',name:'العامل الثالث',serial:'TH-20461'},
-    {user:'1000',pass:'1234',role:'specialist',name:'المختص الاول',serial:'SF-1000'},
-    {user:'1001',pass:'1234',role:'specialist',name:'المختص الثاني',serial:'SF-1001'},
-    {user:'1002',pass:'1234',role:'specialist',name:'المختص الثالث',serial:'SF-1002'}
+    {user:'TH-20481',pass:'1234',role:'worker',name:'العامل الاول',serial:'TH-20481'},
+    {user:'TH-20471',pass:'1234',role:'worker',name:'العامل الثاني',serial:'TH-20471'},
+    {user:'TH-20461',pass:'1234',role:'worker',name:'العامل الثالث',serial:'TH-20461'},
+    {user:'SF-1000',pass:'1234',role:'specialist',name:'المختص الاول',serial:'SF-1000'},
+    {user:'SF-1001',pass:'1234',role:'specialist',name:'المختص الثاني',serial:'SF-1001'},
+    {user:'SF-1002',pass:'1234',role:'specialist',name:'المختص الثالث',serial:'SF-1002'}
   ],
   workers:[
-    {name:'العامل الاول',serial:'TH-20481',owner:'1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'العامل الاول 1',serial:'TH-20482',owner:'1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'العامل الاول 2',serial:'TH-20483',owner:'1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'العامل الثاني',serial:'TH-20471',owner:'1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'العامل الثاني 1',serial:'TH-20472',owner:'1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'العامل الثاني 2',serial:'TH-20473',owner:'1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'العامل الثالث',serial:'TH-20461',owner:'1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'العامل الثالث 1',serial:'TH-20462',owner:'1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
-    {name:'العامل الثالث 2',serial:'TH-20463',owner:'1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'}
+    {name:'العامل الاول',serial:'TH-20481',owner:'SF-1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الاول 1',serial:'TH-20482',owner:'SF-1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الاول 2',serial:'TH-20483',owner:'SF-1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثاني',serial:'TH-20471',owner:'SF-1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثاني 1',serial:'TH-20472',owner:'SF-1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثاني 2',serial:'TH-20473',owner:'SF-1001',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثالث',serial:'TH-20461',owner:'SF-1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثالث 1',serial:'TH-20462',owner:'SF-1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
+    {name:'العامل الثالث 2',serial:'TH-20463',owner:'SF-1002',station:null,day:'safe',week:'safe',month:'safe',status:'safe'}
   ],
   stations:[
-    {id:1,name:'محطة ترطيب A',owner:'1000',lat:24.7136,lng:46.6753},
-    {id:2,name:'محطة ترطيب B',owner:'1000',lat:24.7200,lng:46.6800},
-    {id:3,name:'محطة ترطيب A',owner:'1001',lat:24.7136,lng:46.6753},
-    {id:4,name:'محطة ترطيب A',owner:'1002',lat:24.7136,lng:46.6753}
+    {id:1,name:'محطة ترطيب A',owner:'SF-1000',lat:24.7136,lng:46.6753},
+    {id:2,name:'محطة ترطيب B',owner:'SF-1000',lat:24.7200,lng:46.6800},
+    {id:3,name:'محطة ترطيب A',owner:'SF-1001',lat:24.7136,lng:46.6753},
+    {id:4,name:'محطة ترطيب A',owner:'SF-1002',lat:24.7136,lng:46.6753}
   ],
   alerts:[
     {serial:'TH-20481',kind:'sos',level:'danger',message:'نداء استغاثة (SOS) من العامل - وحدة الإنتاج 3',created_at:new Date(Date.now()-2*864e5).toISOString()},
@@ -663,6 +654,33 @@ const DB={
     /* وضع محلي: بيانات تجريبية */
     const days=[]; for(let i=0;i<14;i++){ const dt=new Date(); dt.setDate(dt.getDate()-i); days.push({d:dt.toISOString().slice(0,10),avg:Math.round((28+Math.random()*14)*10)/10,max:Math.round(32+Math.random()*12)}); }
     return {days, alerts:(db.alerts||[]).filter(x=>x.serial===serial)};
+  },
+  async loadAccounts(owner){
+    if(this.mode==='supabase'){
+      const {data,error}=await this.sb.rpc('ts_list_accounts',{p_owner:owner});
+      if(!error) db.accounts=(data||[]).map(a=>({user:a.username,pass:a.password,name:a.name,serial:a.serial,role:a.role}));
+    }
+    return db.accounts;
+  },
+  async createAccount(o){
+    if(this.mode==='supabase'){
+      const {data,error}=await this.sb.rpc('ts_create_account',{p_role:o.role,p_name:o.name,p_serial:o.serial||'',p_pass:o.pass||'1234',p_owner:o.owner||null});
+      if(error){ if(/USER_EXISTS/.test(error.message)) return {ok:false,msg:'الرقم التسلسلي مستخدم مسبقاً.'}; throw error; }
+      await this.refresh(); await this.loadAccounts(o.owner);
+      return {ok:true,serial:data};
+    }
+    const serial=(o.serial||'').trim()||((o.role==='worker'?'TH-':'SF-')+Math.floor(10000+Math.random()*89999));
+    if((db.accounts||[]).some(a=>a.user===serial)) return {ok:false,msg:'الرقم التسلسلي مستخدم مسبقاً.'};
+    db.accounts.push({user:serial,pass:o.pass||'1234',role:o.role,name:o.name,serial});
+    if(o.role==='worker'&&!db.workers.some(w=>w.serial===serial)) db.workers.push({name:o.name,serial,owner:o.owner,station:null,day:'safe',week:'safe',month:'safe',status:'safe'});
+    store.set('ts_db',db);
+    return {ok:true,serial};
+  },
+  async setPassword(username,pass,owner){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_set_password',{p_username:username,p_pass:pass,p_owner:owner});
+      if(error) throw error; await this.loadAccounts(owner);
+    }else{ const a=(db.accounts||[]).find(x=>x.user===username); if(a) a.pass=pass; store.set('ts_db',db); }
   },
   async login(u,p){
     if(this.mode==='supabase'){
@@ -916,14 +934,10 @@ let _loginBound=false;
 function initLogin(){
   document.getElementById('lgMark').innerHTML=logoSVG();
   document.getElementById('roleChip').innerHTML=`<div class="role-chip ${pickedRole==='worker'?'orange':''}">${pickedRole==='specialist'?'🛡️':'👷'} دخول كـ: ${pickedRole==='specialist'?'مختص سلامة':'عامل'}</div>`;
-  document.getElementById('loginView').style.display='block';
-  document.getElementById('signupView').style.display='none';
-  document.getElementById('loginMsg').textContent=''; document.getElementById('signupMsg').textContent='';
+  document.getElementById('loginMsg').textContent='';
   if(_loginBound) return; _loginBound=true;
   document.querySelectorAll('.pw-toggle').forEach(b=>b.addEventListener('click',()=>{ const t=document.getElementById(b.dataset.target); t.type=t.type==='password'?'text':'password'; }));
-  document.getElementById('toSignup').addEventListener('click',e=>{ e.preventDefault(); document.getElementById('loginView').style.display='none'; document.getElementById('signupView').style.display='block'; });
-  document.getElementById('toLogin').addEventListener('click',e=>{ e.preventDefault(); document.getElementById('signupView').style.display='none'; document.getElementById('loginView').style.display='block'; });
-  document.getElementById('forgot').addEventListener('click',e=>{ e.preventDefault(); toast('للتجربة — عامل: <b>2000</b> · مختص: <b>1000</b> · كلمة المرور: <b>1234</b>'); });
+  document.getElementById('forgot').addEventListener('click',e=>{ e.preventDefault(); const m=document.getElementById('loginMsg'); m.className='hint-msg'; m.innerHTML='🔑 لاستعادة كلمة المرور، تواصل مع <b>مسؤول السلامة</b> لديك.'; });
   const doLogin=async()=>{
     const u=document.getElementById('lgUser').value,p=document.getElementById('lgPass').value,msg=document.getElementById('loginMsg');
     if(!u||!p){ msg.className='hint-msg err'; msg.textContent='يرجى إدخال اسم المستخدم وكلمة المرور.'; return; }
@@ -937,17 +951,6 @@ function initLogin(){
   };
   document.getElementById('loginBtn').addEventListener('click',doLogin);
   document.getElementById('lgPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
-  document.getElementById('signupBtn').addEventListener('click',async()=>{
-    const name=document.getElementById('suName').value,user=document.getElementById('suUser').value,pass=document.getElementById('suPass').value,serial=document.getElementById('suSerial').value,msg=document.getElementById('signupMsg');
-    if(!name||!user||!pass){ msg.className='hint-msg err'; msg.textContent='يرجى تعبئة الاسم واسم المستخدم وكلمة المرور.'; return; }
-    msg.className='hint-msg'; msg.textContent='… جارٍ الإنشاء';
-    try{
-      const r=await DB.signup({user,pass,role:pickedRole,name,serial});
-      if(!r.ok){ msg.className='hint-msg err'; msg.textContent=r.msg; return; }
-      TS.setSession(r.acc);
-      msg.className='hint-msg ok'; msg.textContent='تم إنشاء الحساب ✓'; setTimeout(()=>go(r.acc.role),450);
-    }catch(e){ msg.className='hint-msg err'; msg.textContent='تعذّر إنشاء الحساب. تحقق من الاتصال بقاعدة البيانات.'; }
-  });
 }
 
 /* ---------------- worker ---------------- */
@@ -1158,11 +1161,53 @@ function renderSpecialist(){
       <td>${(st.lat!=null&&st.lng!=null)?`<button class="btn map-station" data-lat="${st.lat}" data-lng="${st.lng}" style="padding:6px 10px">🗺️</button>`:'—'}</td>
       <td><button class="btn del-station" data-id="${st.id}" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
     : `<tr><td colspan="4" style="color:var(--dim);padding:16px">لا توجد محطات — أضف محطة ليختارها العمال.</td></tr>`;
+  renderAccounts();
   reflectDbStatus();
 }
 function myStations(){
   const s=TS.session();
   return (db.stations||[]).filter(st=>!s||st.owner===s.user);
+}
+function myAccounts(){
+  const mine=new Set(myWorkers().map(w=>w.serial));
+  return (db.accounts||[]).filter(a=>mine.has(a.serial));
+}
+function renderAccounts(){
+  const el=document.getElementById('accountBody'); if(!el) return;
+  const list=myAccounts();
+  el.innerHTML = list.length ? list.map(a=>`<tr>
+      <td style="text-align:right">${a.name}</td>
+      <td style="font-family:monospace">${a.user}</td>
+      <td style="font-family:monospace;color:var(--teal-soft)">${a.pass}</td>
+      <td>${a.role==='specialist'?'مختص':'عامل'}</td>
+      <td><button class="btn chg-pass" data-u="${a.user}" style="padding:6px 10px">🔑 تغيير</button></td></tr>`).join('')
+    : `<tr><td colspan="5" style="color:var(--dim);padding:16px">لا توجد حسابات — أنشئ حساباً بزر «إنشاء حساب».</td></tr>`;
+}
+function openAddAccount(){
+  const inp='flex:1;background:transparent;border:none;outline:none;color:var(--text);padding:14px 0;font-size:15px;font-family:inherit';
+  const html=`
+    <div class="field"><label>الاسم</label><div class="input-wrap"><span class="ic">👤</span><input id="acName" type="text" placeholder="اسم الشخص"></div></div>
+    <div class="field"><label>الدور</label><div class="input-wrap"><span class="ic">🧩</span>
+      <select id="acRole" style="${inp}"><option value="worker">عامل</option><option value="specialist">مختص</option></select></div></div>
+    <div class="field"><label>الرقم التسلسلي (= اسم المستخدم)</label><div class="input-wrap"><span class="ic">🏷️</span><input id="acSerial" type="text" placeholder="يُنشأ تلقائياً إن تُرك فارغاً"></div></div>
+    <div class="field"><label>كلمة المرور</label><div class="input-wrap"><span class="ic">🔒</span><input id="acPass" type="text" value="1234"></div></div>
+    <button class="btn btn-orange btn-block" id="acSave">إنشاء الحساب</button>
+    <div class="hint-msg" id="acMsg"></div>`;
+  showModal('➕ إنشاء حساب',html);
+  const back=document.querySelector('.modal-back');
+  back.querySelector('#acSave').addEventListener('click',async()=>{
+    const name=back.querySelector('#acName').value.trim(), role=back.querySelector('#acRole').value, serial=back.querySelector('#acSerial').value.trim(), pass=back.querySelector('#acPass').value.trim()||'1234', msg=back.querySelector('#acMsg'), btn=back.querySelector('#acSave');
+    if(!name){ msg.className='hint-msg err'; msg.textContent='أدخل الاسم.'; return; }
+    const owner=(TS.session()||{}).user||null;
+    btn.disabled=true; msg.className='hint-msg'; msg.textContent='… جارٍ الإنشاء';
+    try{
+      const r=await DB.createAccount({role,name,serial,pass,owner});
+      if(!r.ok){ msg.className='hint-msg err'; msg.textContent=r.msg; btn.disabled=false; return; }
+      renderSpecialist(); renderAccounts();
+      back.classList.remove('open');
+      toast('تم إنشاء الحساب ✓ — المستخدم: <b>'+r.serial+'</b> / '+pass);
+    }catch(e){ msg.className='hint-msg err'; msg.textContent='تعذّر الإنشاء.'; btn.disabled=false; }
+  });
 }
 function openMap(lat,lng){ if(lat==null||lng==null) return false; window.open('https://www.google.com/maps?q='+lat+','+lng,'_blank'); return true; }
 /* نص/إحداثيات موقع نداء SOS: من محطة العامل الحالية */
@@ -1243,8 +1288,16 @@ function openAddWorker(){
 }
 function initSpecialist(){
   renderSpecialist();
+  DB.loadAccounts((TS.session()||{}).user).then(renderAccounts).catch(()=>{});
   if(_specBound) return; _specBound=true;
   document.getElementById('addWorkerBtn').addEventListener('click',openAddWorker);
+  document.getElementById('addAccountBtn').addEventListener('click',openAddAccount);
+  document.getElementById('accountBody').addEventListener('click',e=>{
+    const b=e.target.closest('.chg-pass'); if(!b) return;
+    const u=b.dataset.u, np=prompt('كلمة المرور الجديدة للحساب '+u+':');
+    if(np==null) return; const p=String(np).trim(); if(!p){ toast('كلمة المرور فارغة.',true); return; }
+    DB.setPassword(u,p,(TS.session()||{}).user).then(()=>{ renderAccounts(); toast('تم تغيير كلمة المرور ✓'); }).catch(()=>toast('تعذّر التغيير.',true));
+  });
   document.getElementById('threshInput').value=db.threshold||38;
   document.getElementById('threshSave').addEventListener('click',()=>{
     const v=parseFloat(document.getElementById('threshInput').value);
