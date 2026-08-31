@@ -1,0 +1,17 @@
+{
+  "name": "ThermaSafe",
+  "short_name": "ThermaSafe",
+  "description": "نظام ذكي لمراقبة التعرّض الحراري للعمال",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070d1a",
+  "theme_color": "#0a1424",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
