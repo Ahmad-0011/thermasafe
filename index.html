@@ -480,7 +480,7 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
         <button class="btn-loc" id="sosLoc">📍 عرض الموقع</button>
         <div class="sos-mid"><div class="sos-icon">⚠️</div>
           <div class="sos-txt"><b id="sosTitle">تنبيه: عامل رقم 44563 استخدم زر SOS</b>
-            <div class="meta"><span>🕐 الوقت: <span id="sosTime">10:32 AM</span></span><span>📍 الموقع: <span id="sosPlace">وحدة الإنتاج 3</span></span></div></div></div>
+            <div class="meta"><span>🕐 الوقت: <span id="sosTime">—</span></span><span>📍 الموقع: <span id="sosPlace">—</span></span></div></div></div>
       </div>
     </div>
 
@@ -791,10 +791,11 @@ function sosWorkerName(row){
 }
 function onSosAlert(row){
   const who=sosWorkerName(row);
-  const loc=row&&row.location?(' — '+row.location):'';
-  toast('🆘 نداء استغاثة جديد من: <b>'+who+'</b>'+loc+' — تحقّق فوراً!',true);
+  const c=sosStationCoords({serial:(row&&row.serial),loc:(row&&row.location),lat:(row&&row.lat),lng:(row&&row.lng)});
+  const locName=c?(c.name||''):((row&&row.location)||'');
+  toast('🆘 نداء استغاثة جديد من: <b>'+who+'</b>'+(locName?(' — '+locName):'')+' — تحقّق فوراً!',true);
   const s=TS.session();
-  if(s && s.role==='specialist') showSosOverlay(row);   // الشاشة الحمراء للمختص فقط
+  if(s && s.role==='specialist' && s.user!=='@111') showSosOverlay(row);   // الشاشة الحمراء للمختص (لا تظهر لحساب العرض)
   else playBeep(880);
 }
 function showSosOverlay(row){
@@ -1027,7 +1028,9 @@ function initWorker(){
   });
   document.getElementById('sosBtn').addEventListener('click',()=>{
     if(confirm('إرسال نداء استغاثة (SOS) إلى مختص السلامة مع موقعك الحالي؟')){
-      DB.sendSos({serial:worker.serial,name:worker.name,loc:'وحدة الإنتاج 3'})
+      const row=db.workers.find(x=>x.serial===worker.serial);
+      const loc=(row&&row.station)?row.station:'غير محدد';
+      DB.sendSos({serial:worker.serial,name:worker.name,loc})
         .then(()=>toast('🆘 تم إرسال نداء SOS إلى مختص السلامة. ابقَ في مكان آمن.',true))
         .catch(()=>toast('تعذّر إرسال النداء. تحقق من الاتصال.',true));
     }
@@ -1147,7 +1150,7 @@ function renderSpecialist(){
         ? `<td class="temp-edit-cell" data-s="${r.serial}" style="cursor:pointer" title="اضغط لضبط درجة الحرارة يدوياً">${tempCell(r.temperature,th)} ✏️</td>`
         : `<td>${tempCell(r.temperature,th)}</td>`}
       <td>${statusCell(r.status)}</td>
-      <td><button class="btn rep-worker" data-s="${r.serial}" title="عرض التقرير" style="padding:6px 10px">📄</button></td>
+      <td>${demo?`<button class="btn sos-worker" data-s="${r.serial}" title="إرسال إنذار للمختص" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f;margin-left:6px">🚨</button>`:''}<button class="btn rep-worker" data-s="${r.serial}" title="عرض التقرير" style="padding:6px 10px">📄</button></td>
       <td><button class="btn del-worker" data-s="${r.serial}" title="حذف العامل" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
     : `<tr><td colspan="9" style="color:var(--dim);padding:22px">لا يوجد عمال بعد — أضف عاملاً جديداً بزر «إضافة عامل».</td></tr>`;
   /* تحذير الحرارة: العمال المتجاوزون للحد */
@@ -1349,6 +1352,12 @@ function initSpecialist(){
       if(isNaN(t)||t<0||t>120){ toast('أدخل قيمة صحيحة (0–120).',true); return; }
       DB.setTempManual(w.serial,t).then(()=>{ renderSpecialist(); toast('تم ضبط حرارة العامل إلى '+t+'°م ✓'); }).catch(()=>toast('تعذّر ضبط الحرارة.',true));
       return; }
+    const sos=e.target.closest('.sos-worker');
+    if(sos){ const w=db.workers.find(x=>x.serial===sos.dataset.s); if(!w) return;
+      if(confirm('إرسال إنذار طوارئ للمختص باسم العامل «'+w.name+'»؟')){
+        const loc=w.station||'غير محدد';
+        DB.sendSos({serial:w.serial,name:w.name,loc}).then(()=>toast('🚨 تم إرسال الإنذار للمختص — الموقع: '+loc)).catch(()=>toast('تعذّر إرسال الإنذار.',true));
+      } return; }
     const rep=e.target.closest('.rep-worker');
     if(rep){ const w=db.workers.find(x=>x.serial===rep.dataset.s); if(w) openWorkerReport(w); return; }
     const del=e.target.closest('.del-worker'); if(!del) return;
