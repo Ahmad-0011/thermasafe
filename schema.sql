@@ -232,7 +232,8 @@ insert into public.accounts(username, password, role, name, serial) values
   ('TH-20461','1234','worker','العامل الثالث','TH-20461'),
   ('SF-1000','1234','specialist','المختص الاول','SF-1000'),
   ('SF-1001','1234','specialist','المختص الثاني','SF-1001'),
-  ('SF-1002','1234','specialist','المختص الثالث','SF-1002')
+  ('SF-1002','1234','specialist','المختص الثالث','SF-1002'),
+  ('@111','@111','specialist','حساب العرض (كل العمال)','@111')
 on conflict (username) do nothing;
 
 insert into public.workers(name, serial, owner) values

@@ -145,14 +145,14 @@ a{color:inherit;text-decoration:none;} button{font-family:inherit;cursor:pointer
 .station .st-info b{font-size:18px;} .station .st-info .dist{color:var(--muted);font-size:13px;margin-top:2px;} .station .st-info p{color:var(--dim);font-size:12px;margin:6px 0 0;max-width:240px;}
 .station .btn-go{border:1px solid var(--teal);color:var(--teal-soft);background:rgba(46,196,182,.06);border-radius:12px;padding:14px 18px;display:inline-flex;gap:8px;align-items:center;font-weight:600;}
 
-.report-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;align-items:center;}
+.report-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:center;}
 .report-ring{width:118px;height:118px;border-radius:50%;display:grid;place-items:center;text-align:center;border:4px solid var(--orange);box-shadow:inset 0 0 24px -8px rgba(240,130,31,.5);}
 .report-ring .cap{color:var(--muted);font-size:10px;} .report-ring .lvl{font-size:20px;font-weight:800;color:var(--orange-soft);}
 .stat-cell{text-align:center;} .stat-cell .cap{color:var(--muted);font-size:12px;margin-bottom:8px;} .stat-cell .v{font-size:22px;font-weight:800;} .stat-cell .ic{font-size:20px;margin-top:6px;color:var(--dim);}
 .download-bar{margin-top:16px;text-align:center;border:1px dashed var(--line-strong);border-radius:12px;padding:14px;color:var(--muted);font-size:14px;cursor:pointer;transition:.16s;}
 .download-bar:hover{color:var(--teal-soft);border-color:var(--teal);}
 
-.sensor{display:grid;grid-template-columns:130px repeat(4,1fr);gap:14px;align-items:center;}
+.sensor{display:grid;grid-template-columns:130px repeat(3,1fr);gap:14px;align-items:center;}
 .helmet{font-size:64px;text-align:center;} .helmet .strip{width:76px;height:8px;border-radius:6px;margin:4px auto 0;background:linear-gradient(90deg,var(--safe),var(--mid),var(--orange),var(--danger));box-shadow:0 0 14px -2px rgba(240,130,31,.6);}
 
 .legend-inline{display:flex;gap:18px;justify-content:flex-start;margin-bottom:16px;font-size:13px;color:var(--muted);flex-wrap:wrap;}
@@ -397,7 +397,6 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
       <div class="report-row">
         <div class="report-ring" id="reportRing"><div><div class="cap">Heat Exposure Dose</div><div class="lvl" id="rLevel">—</div>🛡️</div></div>
         <div class="stat-cell"><div class="cap">درجة الحرارة</div><div class="v" id="rTemp">—</div><div class="ic">🌡️</div></div>
-        <div class="stat-cell"><div class="cap">الرطوبة</div><div class="v" id="rHum">—</div><div class="ic">💧</div></div>
         <div class="stat-cell"><div class="cap">مدة التعرّض</div><div class="v" id="rHours">—</div><div class="ic">⏱️</div></div>
         <div class="stat-cell"><div class="cap">التوصية</div><div class="v" id="rRec" style="font-size:15px">—</div><div class="ic">☕</div></div>
       </div>
@@ -409,7 +408,6 @@ table.data tbody tr:hover{background:rgba(46,196,182,.03);}
       <div class="sensor">
         <div class="helmet">⛑️<div class="strip"></div></div>
         <div class="stat-cell"><div class="cap">درجة الحرارة</div><div class="v" id="sTemp">—</div><div class="ic">🌡️</div></div>
-        <div class="stat-cell"><div class="cap">الرطوبة النسبية</div><div class="v" id="sHum">—</div><div class="ic">💧</div></div>
         <div class="stat-cell"><div class="cap">مؤشر الإجهاد الحراري</div><div class="v" id="sIndex" style="color:var(--orange-soft)">—</div><div class="ic">♨️</div></div>
         <div class="stat-cell"><div class="cap">آخر تحديث</div><div class="v" id="sUpd" style="font-size:15px">منذ 1 دقيقة</div><div class="ic">🕐</div></div>
       </div>
@@ -522,7 +520,8 @@ function seedDB(){ return {
     {user:'TH-20461',pass:'1234',role:'worker',name:'العامل الثالث',serial:'TH-20461'},
     {user:'SF-1000',pass:'1234',role:'specialist',name:'المختص الاول',serial:'SF-1000'},
     {user:'SF-1001',pass:'1234',role:'specialist',name:'المختص الثاني',serial:'SF-1001'},
-    {user:'SF-1002',pass:'1234',role:'specialist',name:'المختص الثالث',serial:'SF-1002'}
+    {user:'SF-1002',pass:'1234',role:'specialist',name:'المختص الثالث',serial:'SF-1002'},
+    {user:'@111',pass:'@111',role:'specialist',name:'حساب العرض (كل العمال)',serial:'@111'}
   ],
   workers:[
     {name:'العامل الاول',serial:'TH-20481',owner:'SF-1000',station:null,day:'safe',week:'safe',month:'safe',status:'safe'},
@@ -681,6 +680,21 @@ const DB={
       const {error}=await this.sb.rpc('ts_set_password',{p_username:username,p_pass:pass,p_owner:owner});
       if(error) throw error; await this.loadAccounts(owner);
     }else{ const a=(db.accounts||[]).find(x=>x.user===username); if(a) a.pass=pass; store.set('ts_db',db); }
+  },
+  async setTempManual(serial,temp){
+    if(this.mode==='supabase'){
+      const {error}=await this.sb.rpc('ts_update_temp',{p_serial:serial,p_temp:temp});
+      if(error) throw error; await this.refresh();
+    }else{
+      const w=db.workers.find(x=>x.serial===serial); if(!w) return;
+      const th=db.threshold||38, city=db.city||40, eff=temp+Math.max(0,city-35)*0.4;
+      w.temperature=temp; w.temp_at=new Date().toISOString();
+      w.status = eff>=th?'danger':eff>=th-2?'high':eff>=th-6?'mid':'safe'; w.day=w.status;
+      const inc=Math.max(0,eff-(th-8)); w.dose_week=(w.dose_week||0)+inc; w.dose_month=(w.dose_month||0)+inc;
+      const lvl=d=>d<15?'safe':d<45?'mid':d<90?'high':'danger';
+      w.week=lvl(w.dose_week); w.month=lvl(w.dose_month);
+      store.set('ts_db',db);
+    }
   },
   async login(u,p){
     if(this.mode==='supabase'){
@@ -850,8 +864,8 @@ const AI={
   levelFromHours(h){ if(h<10)return{key:'safe',label:'منخفض',color:'var(--safe)'}; if(h<=20)return{key:'mid',label:'متوسط',color:'var(--mid)'}; if(h<=30)return{key:'high',label:'مرتفع',color:'var(--orange)'}; return{key:'danger',label:'خطر',color:'var(--danger)'}; },
   heatIndex(t,h){ return Math.round(t+(h-40)*0.12); },
   workerInsights(w){
-    const lvl=this.levelFromHours(w.weekHours), hi=this.heatIndex(w.temp,w.humidity), out=[];
-    out.push({type:'info',title:'تقييم الجرعة الحرارية (HED)',text:`تحليل الذكاء الاصطناعي: إجمالي تعرّضك هذا الأسبوع ${w.weekHours} ساعة عند متوسط ${w.temp}°م ورطوبة ${w.humidity}٪. مؤشر الإجهاد الحراري المُقدّر ≈ ${hi}. تصنيفك الحالي: ${lvl.label}.`});
+    const lvl=this.levelFromHours(w.weekHours), out=[];
+    out.push({type:'info',title:'تقييم الجرعة الحرارية (HED)',text:`تحليل الذكاء الاصطناعي: إجمالي تعرّضك هذا الأسبوع ${w.weekHours} ساعة عند متوسط ${w.temp}°م. تصنيفك الحالي: ${lvl.label}.`});
     if(lvl.key==='safe') out.push({type:'info',title:'الحالة جيدة',text:'مستوى تعرّضك ضمن النطاق الآمن. استمر في شرب الماء بانتظام والالتزام بفترات الراحة.'});
     else if(lvl.key==='mid') out.push({type:'warn',title:'انتبه',text:'اقتربت من الحد المرتفع. يوصي النظام بأخذ استراحة 15 دقيقة كل ساعتين والانتقال لأقرب محطة ترطيب.'});
     else out.push({type:'crit',title:'تدخل مطلوب',text:'مستوى تعرّضك مرتفع/خطر. يُنصح بإيقاف العمل مؤقتاً، والانتقال لمنطقة مظللة، وإبلاغ مختص السلامة. زر SOS متاح عند الحاجة.'});
@@ -979,10 +993,8 @@ function initWorker(){
   document.getElementById('wName').textContent=worker.name;
   document.getElementById('wSerial').textContent=worker.serial;
   document.getElementById('rTemp').textContent=worker.temp+'°C';
-  document.getElementById('rHum').textContent=worker.humidity+'%';
   document.getElementById('rRec').textContent='خذ استراحة 15 دقيقة';
   document.getElementById('sTemp').textContent=worker.sensorTemp+'°C';
-  document.getElementById('sHum').textContent=worker.sensorHum+'%';
   document.getElementById('sIndex').textContent='متوسط';
   document.getElementById('startWork').textContent='▶ ابدأ العمل';
   applyRange('week');
@@ -1059,7 +1071,6 @@ function updateWorkerTemp(){
     badge.innerHTML='🌡️ '+fmtTemp(t);
     const st=document.getElementById('sTemp'); if(st) st.textContent=fmtTemp(t);
     const rt=document.getElementById('rTemp'); if(rt) rt.textContent=fmtTemp(t);
-    if(row.humidity!=null){ const hv=Math.round(Number(row.humidity))+'%'; const sh=document.getElementById('sHum'); if(sh) sh.textContent=hv; const rh=document.getElementById('rHum'); if(rh) rh.textContent=hv; }
     const su=document.getElementById('sUpd'); if(su && row.temp_at) su.textContent=new Date(row.temp_at).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'});
   }else{ badge.style.display='none'; }
   /* الحالة اللحظية على حلقة تقرير السلامة + مؤشر الإجهاد */
@@ -1122,6 +1133,7 @@ function tempCell(t,th){ if(t==null) return '<span style="color:var(--dim)">—<
 function myWorkers(){
   const s=TS.session();
   if(!s) return db.workers;
+  if(s.user==='@111') return db.workers;   /* حساب العرض يرى كل العمال */
   return db.workers.filter(w=>w.owner===s.user);
 }
 function renderSpecialist(){
@@ -1130,7 +1142,7 @@ function renderSpecialist(){
   document.getElementById('reportBody').innerHTML = list.length ? list.map(r=>`<tr>
       <td style="text-align:right">${r.name}</td><td>${r.serial}</td>
       <td>${badge(r.day)}</td><td>${badge(r.week)}</td><td>${badge(r.month)}</td>
-      <td>${tempCell(r.temperature,th)}</td>
+      <td class="temp-edit-cell" data-s="${r.serial}" style="cursor:pointer" title="اضغط لضبط درجة الحرارة يدوياً">${tempCell(r.temperature,th)} ✏️</td>
       <td>${statusCell(r.status)}</td>
       <td><button class="btn rep-worker" data-s="${r.serial}" title="عرض التقرير" style="padding:6px 10px">📄</button></td>
       <td><button class="btn del-worker" data-s="${r.serial}" title="حذف العامل" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
@@ -1327,6 +1339,13 @@ function initSpecialist(){
     },()=>toast('تعذّر تحديد الموقع (اسمح بالإذن في المتصفح).',true));
   });
   document.getElementById('reportBody').addEventListener('click',e=>{
+    const te=e.target.closest('.temp-edit-cell');
+    if(te){ const w=db.workers.find(x=>x.serial===te.dataset.s); if(!w) return;
+      const v=prompt('اضبط درجة حرارة العامل «'+w.name+'» (°م):', w.temperature!=null?w.temperature:36);
+      if(v==null) return; const t=parseFloat(v);
+      if(isNaN(t)||t<0||t>120){ toast('أدخل قيمة صحيحة (0–120).',true); return; }
+      DB.setTempManual(w.serial,t).then(()=>{ renderSpecialist(); toast('تم ضبط حرارة العامل إلى '+t+'°م ✓'); }).catch(()=>toast('تعذّر ضبط الحرارة.',true));
+      return; }
     const rep=e.target.closest('.rep-worker');
     if(rep){ const w=db.workers.find(x=>x.serial===rep.dataset.s); if(w) openWorkerReport(w); return; }
     const del=e.target.closest('.del-worker'); if(!del) return;
