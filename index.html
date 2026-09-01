@@ -1139,10 +1139,13 @@ function myWorkers(){
 function renderSpecialist(){
   const th=db.threshold||38;
   const list=myWorkers();
+  const demo=(TS.session()||{}).user==='@111';   /* تعديل الحرارة في حساب العرض فقط */
   document.getElementById('reportBody').innerHTML = list.length ? list.map(r=>`<tr>
       <td style="text-align:right">${r.name}</td><td>${r.serial}</td>
       <td>${badge(r.day)}</td><td>${badge(r.week)}</td><td>${badge(r.month)}</td>
-      <td class="temp-edit-cell" data-s="${r.serial}" style="cursor:pointer" title="اضغط لضبط درجة الحرارة يدوياً">${tempCell(r.temperature,th)} ✏️</td>
+      ${demo
+        ? `<td class="temp-edit-cell" data-s="${r.serial}" style="cursor:pointer" title="اضغط لضبط درجة الحرارة يدوياً">${tempCell(r.temperature,th)} ✏️</td>`
+        : `<td>${tempCell(r.temperature,th)}</td>`}
       <td>${statusCell(r.status)}</td>
       <td><button class="btn rep-worker" data-s="${r.serial}" title="عرض التقرير" style="padding:6px 10px">📄</button></td>
       <td><button class="btn del-worker" data-s="${r.serial}" title="حذف العامل" style="padding:6px 10px;border-color:rgba(239,68,68,.5);color:#ff8f8f">🗑️</button></td></tr>`).join('')
